@@ -25,6 +25,7 @@ Each menu item should be clear, readable, and accessible from desktop and mobile
 
 ### Right Section
 
+- Country selector icon
 - Language selector icon
 - Notification bell icon
 - User profile icon
@@ -75,4 +76,3 @@ src/
       app-footer.tsx
       nav-link.tsx
 ```
-

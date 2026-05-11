@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Bell, Building2, Languages, UserCircle } from "lucide-react";
+import { Bell, Building2, Flag, Languages, UserCircle } from "lucide-react";
 import { NavLink } from "@/components/layout/nav-link";
 
 const navigationItems = [
@@ -37,6 +37,13 @@ export function AppHeader() {
         </nav>
 
         <div className="flex items-center gap-2">
+          <button
+            aria-label="Select country"
+            className="flex h-10 w-10 items-center justify-center rounded-md border border-[#d1d8ca] text-[#34423a] transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]"
+            type="button"
+          >
+            <Flag aria-hidden="true" size={20} />
+          </button>
           <button
             aria-label="Select language"
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#d1d8ca] text-[#34423a] transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]"
