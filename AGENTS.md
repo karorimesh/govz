@@ -26,6 +26,17 @@ Use the existing project structure if the app has already been created. Do not r
 
 After setup, create or update `Layout.md` and use it as the source of truth for the shared navigation bar, footer, and layout components.
 
+Create and reference page planning files before implementing each major section:
+
+- `Homepage.md` for the home page.
+- `GovernmentStructure.md` for the Government Structure menu item.
+- `TheLaw.md` for The Law menu item.
+- `PublicVote.md` for the Public Vote menu item.
+- `OpinionPolls.md` for the Opinion Polls menu item.
+- `HelpLine.md` for the Help Line menu item.
+
+These files may start blank and should be filled in as each section is designed and implemented.
+
 ## Code Style
 
 - Use TypeScript for application code.
