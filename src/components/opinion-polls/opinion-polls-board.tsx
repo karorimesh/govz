@@ -9,6 +9,8 @@ import {
   Search,
   X,
 } from "lucide-react";
+import { useLocalization } from "@/components/localization/localization-provider";
+import { translateLabel } from "@/lib/localization/labels";
 
 type PollCategory = "policy" | "service" | "budget" | "law" | "community" | "other";
 type PollStatus = "open" | "upcoming" | "closed";
@@ -157,6 +159,7 @@ export function OpinionPollsBoard({
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [pollForm, setPollForm] = useState<PollForm>(blankPollForm);
+  const { t } = useLocalization();
 
   const filteredPolls = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -316,7 +319,7 @@ export function OpinionPollsBoard({
                 setQuery(event.target.value);
                 setPage(1);
               }}
-              placeholder="Search polls"
+              placeholder={t("common.search")}
               type="search"
               value={query}
             />
@@ -327,7 +330,7 @@ export function OpinionPollsBoard({
             type="button"
           >
             <FilePlus2 aria-hidden="true" size={18} />
-            Create Poll
+            {t("common.create")}
           </button>
         </div>
       </div>
@@ -361,7 +364,7 @@ export function OpinionPollsBoard({
         </p>
         <div className="flex items-center gap-2">
           <button
-            aria-label="Previous page"
+            aria-label={t("common.previousPage")}
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#cbd4c4] bg-white text-[#34423a] transition hover:bg-[#e7ebe2] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={currentPage === 1}
             onClick={() => setPage((value) => Math.max(1, value - 1))}
@@ -373,7 +376,7 @@ export function OpinionPollsBoard({
             Page {currentPage} of {pageCount}
           </span>
           <button
-            aria-label="Next page"
+            aria-label={t("common.nextPage")}
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#cbd4c4] bg-white text-[#34423a] transition hover:bg-[#e7ebe2] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={currentPage === pageCount}
             onClick={() => setPage((value) => Math.min(pageCount, value + 1))}
@@ -571,6 +574,8 @@ function OpinionInputForm({
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   poll: Poll;
 }) {
+  const { t } = useLocalization();
+
   return (
     <form className="grid gap-4 rounded-lg bg-[#f7f8f3] p-4" onSubmit={onSubmit}>
       {!poll.allowAnonymous ? (
@@ -617,12 +622,12 @@ function OpinionInputForm({
 
       {poll.inputTypes.includes("comment") ? (
         <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-          Comment
+          {t("form.comments")}
           <textarea
             className="min-h-28 rounded-md border border-[#cbd4c4] bg-white p-3 text-sm outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
             maxLength={500}
             name="comment"
-            placeholder="Share your opinion"
+            placeholder={t("form.comments")}
           />
         </label>
       ) : null}
@@ -631,7 +636,7 @@ function OpinionInputForm({
         className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
         type="submit"
       >
-        Submit opinion
+        {t("common.submit")}
       </button>
     </form>
   );
@@ -691,6 +696,8 @@ function CreatePollModal({
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
 }) {
+  const { t } = useLocalization();
+
   function updateForm<K extends keyof PollForm>(key: K, value: PollForm[K]) {
     onChange({ ...form, [key]: value });
   }
@@ -720,7 +727,7 @@ function CreatePollModal({
           value={form.title}
         />
         <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-          Description
+          {t("form.description")}
           <textarea
             className="min-h-28 rounded-md border border-[#cbd4c4] bg-white p-3 text-sm outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
             onChange={(event) => updateForm("description", event.target.value)}
@@ -777,7 +784,7 @@ function CreatePollModal({
 
         <fieldset className="grid gap-3 rounded-lg bg-[#f7f8f3] p-4">
           <legend className="text-sm font-semibold text-[#17201a]">
-            Input types
+            {t("form.type")}
           </legend>
           <div className="grid gap-2 sm:grid-cols-2">
             {(["vote", "rating", "reaction", "comment"] as InputType[]).map(
@@ -839,7 +846,7 @@ function CreatePollModal({
         {form.inputTypes.reaction ? (
           <fieldset className="grid gap-3 rounded-lg bg-[#f7f8f3] p-4">
             <legend className="text-sm font-semibold text-[#17201a]">
-              Reaction options
+              {t("form.reaction")}
             </legend>
             <div className="grid gap-2 sm:grid-cols-2">
               {reactionChoices.map((reaction) => (
@@ -878,7 +885,7 @@ function CreatePollModal({
           className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
           type="submit"
         >
-          Create poll
+          {t("common.create")}
         </button>
       </form>
     </Modal>
@@ -894,6 +901,8 @@ function Modal({
   onClose: () => void;
   title: string;
 }) {
+  const { t } = useLocalization();
+
   return (
     <div
       aria-modal="true"
@@ -904,7 +913,7 @@ function Modal({
         <div className="mb-5 flex items-start justify-between gap-4 border-b border-[#d9dfd2] pb-4">
           <h2 className="text-xl font-semibold text-[#17201a]">{title}</h2>
           <button
-            aria-label="Close modal"
+            aria-label={t("common.closeModal")}
             className="flex h-9 w-9 items-center justify-center rounded-md border border-[#cbd4c4] text-[#34423a] transition hover:bg-[#e7ebe2]"
             onClick={onClose}
             type="button"
@@ -944,9 +953,11 @@ function FormInput({
   type?: string;
   value?: string;
 }) {
+  const { t } = useLocalization();
+
   return (
     <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-      {label}
+      {translateLabel(t, label)}
       <input
         className="h-11 rounded-md border border-[#cbd4c4] bg-white px-3 text-sm outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
         name={name}
@@ -972,9 +983,11 @@ function SelectInput({
   options: readonly string[];
   value?: string;
 }) {
+  const { t } = useLocalization();
+
   return (
     <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-      {label}
+      {translateLabel(t, label)}
       <select
         className="h-11 rounded-md border border-[#cbd4c4] bg-white px-3 text-sm capitalize outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
         name={name}
@@ -982,7 +995,7 @@ function SelectInput({
         required
         value={value}
       >
-        <option value="">Select {label.toLowerCase()}</option>
+        <option value="">{translateLabel(t, label)}</option>
         {options.map((option) => (
           <option key={option} value={option}>
             {option}
@@ -1002,6 +1015,8 @@ function Checkbox({
   label: string;
   onChange: (checked: boolean) => void;
 }) {
+  const { t } = useLocalization();
+
   return (
     <label className="flex items-center gap-2 text-sm font-medium capitalize text-[#34423a]">
       <input
@@ -1010,7 +1025,7 @@ function Checkbox({
         onChange={(event) => onChange(event.target.checked)}
         type="checkbox"
       />
-      {label}
+      {translateLabel(t, label)}
     </label>
   );
 }

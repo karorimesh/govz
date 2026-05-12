@@ -1,16 +1,35 @@
+"use client";
+
 import Link from "next/link";
-import { Bell, Building2, Flag, Languages, UserCircle } from "lucide-react";
+import { Bell, Building2, UserCircle } from "lucide-react";
 import { NavLink } from "@/components/layout/nav-link";
+import { useLocalization } from "@/components/localization/localization-provider";
+import type { LanguageCode, TranslationKey } from "@/lib/localization/dictionaries";
 
 const navigationItems = [
-  { href: "/government-structure", label: "Government Structure" },
-  { href: "/the-law", label: "The Law" },
-  { href: "/public-vote", label: "Public Vote" },
-  { href: "/opinion-polls", label: "Opinion Polls" },
-  { href: "/help-line", label: "Help Line" },
-];
+  { href: "/government-structure", labelKey: "nav.governmentStructure" },
+  { href: "/the-law", labelKey: "nav.theLaw" },
+  { href: "/public-vote", labelKey: "nav.publicVote" },
+  { href: "/opinion-polls", labelKey: "nav.opinionPolls" },
+  { href: "/help-line", labelKey: "nav.helpLine" },
+] satisfies Array<{ href: string; labelKey: TranslationKey }>;
+
+const countrySelectClass =
+  "h-10 max-w-24 rounded-md border border-[#d1d8ca] bg-transparent px-2 text-sm text-[#34423a] outline-none transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]";
+const languageSelectClass =
+  "h-10 max-w-24 rounded-md border border-[#d1d8ca] bg-transparent px-2 text-sm text-[#34423a] outline-none transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]";
 
 export function AppHeader() {
+  const {
+    countries,
+    country,
+    languages,
+    language,
+    setCountryCode,
+    setLanguageCode,
+    t,
+  } = useLocalization();
+
   return (
     <header className="border-b border-[#d9dfd2] bg-[#f7f8f3]/95">
       <div className="mx-auto flex w-full max-w-7xl flex-col gap-4 px-5 py-4 lg:flex-row lg:items-center lg:justify-between lg:px-8">
@@ -28,38 +47,62 @@ export function AppHeader() {
         </Link>
 
         <nav
-          aria-label="Primary navigation"
+          aria-label={t("nav.primary")}
           className="flex flex-wrap items-center gap-1"
         >
           {navigationItems.map((item) => (
-            <NavLink href={item.href} key={item.href} label={item.label} />
+            <NavLink
+              href={item.href}
+              key={item.href}
+              label={t(item.labelKey)}
+            />
           ))}
         </nav>
 
         <div className="flex items-center gap-2">
-          <button
-            aria-label="Select country"
-            className="flex h-10 w-10 items-center justify-center rounded-md border border-[#d1d8ca] text-[#34423a] transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]"
-            type="button"
+          <label className="sr-only" htmlFor="country-selector">
+            {t("nav.selectCountry")}
+          </label>
+          <select
+            aria-label={t("nav.selectCountry")}
+            className={countrySelectClass}
+            id="country-selector"
+            onChange={(event) => setCountryCode(event.target.value)}
+            value={country.code}
           >
-            <Flag aria-hidden="true" size={20} />
-          </button>
-          <button
-            aria-label="Select language"
-            className="flex h-10 w-10 items-center justify-center rounded-md border border-[#d1d8ca] text-[#34423a] transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]"
-            type="button"
+            {countries.map((countryItem) => (
+              <option key={countryItem.code} value={countryItem.code}>
+                {countryItem.flagIcon} {countryItem.code}
+              </option>
+            ))}
+          </select>
+          <label className="sr-only" htmlFor="language-selector">
+            {t("nav.selectLanguage")}
+          </label>
+          <select
+            aria-label={t("nav.selectLanguage")}
+            className={languageSelectClass}
+            id="language-selector"
+            onChange={(event) =>
+              setLanguageCode(event.target.value as LanguageCode)
+            }
+            value={language.code}
           >
-            <Languages aria-hidden="true" size={20} />
-          </button>
+            {languages.map((languageItem) => (
+              <option key={languageItem.code} value={languageItem.code}>
+                {languageItem.nativeName}
+              </option>
+            ))}
+          </select>
           <button
-            aria-label="View notifications"
+            aria-label={t("nav.notifications")}
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#d1d8ca] text-[#34423a] transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]"
             type="button"
           >
             <Bell aria-hidden="true" size={20} />
           </button>
           <button
-            aria-label="Open user profile"
+            aria-label={t("nav.profile")}
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#d1d8ca] text-[#34423a] transition hover:bg-[#e7ebe2] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#2f6f5e]"
             type="button"
           >

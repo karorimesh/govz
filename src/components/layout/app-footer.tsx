@@ -1,31 +1,36 @@
+"use client";
+
 import Link from "next/link";
+import { useLocalization } from "@/components/localization/localization-provider";
 
 const socialPlatforms = ["Facebook", "X / Twitter", "Instagram", "LinkedIn", "YouTube"];
 
 export function AppFooter() {
+  const { t } = useLocalization();
+
   return (
     <footer className="border-t border-[#d9dfd2] bg-[#17201a] text-white">
       <div className="mx-auto grid w-full max-w-7xl gap-8 px-5 py-8 sm:grid-cols-2 lg:grid-cols-3 lg:px-8">
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#c9d8c2]">
-            Phone Contacts
+            {t("footer.phoneContacts")}
           </h2>
           <address className="mt-4 flex flex-col gap-2 text-sm not-italic text-[#eef4ea]">
             <Link className="w-fit hover:text-[#f7c948]" href="tel:+254700000000">
-              Main office: +254 700 000 000
+              {t("footer.mainOffice")}: +254 700 000 000
             </Link>
             <Link className="w-fit hover:text-[#f7c948]" href="tel:+254711111111">
-              Help line: +254 711 111 111
+              {t("footer.helpLine")}: +254 711 111 111
             </Link>
             <Link className="w-fit hover:text-[#f7c948]" href="tel:999">
-              Urgent support: 999
+              {t("footer.urgentSupport")}: 999
             </Link>
           </address>
         </section>
 
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#c9d8c2]">
-            Social Platforms
+            {t("footer.socialPlatforms")}
           </h2>
           <div className="mt-4 flex flex-wrap gap-2">
             {socialPlatforms.map((platform) => (
@@ -42,7 +47,7 @@ export function AppFooter() {
 
         <section>
           <h2 className="text-sm font-semibold uppercase tracking-[0.16em] text-[#c9d8c2]">
-            Address
+            {t("footer.address")}
           </h2>
           <address className="mt-4 text-sm leading-6 not-italic text-[#eef4ea]">
             GOVZ Civic Services Office

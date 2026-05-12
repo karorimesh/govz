@@ -4,6 +4,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useMemo, useState } from "react";
+import { useLocalization } from "@/components/localization/localization-provider";
 
 type Story = {
   title: string;
@@ -20,6 +21,7 @@ type TopStoriesProps = {
 const storiesPerPage = 5;
 
 export function TopStories({ stories }: TopStoriesProps) {
+  const { t } = useLocalization();
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
 
@@ -71,7 +73,7 @@ export function TopStories({ stories }: TopStoriesProps) {
         </div>
 
         <label className="relative w-full max-w-md" htmlFor="story-search">
-          <span className="sr-only">Search stories</span>
+          <span className="sr-only">{t("common.search")}</span>
           <Search
             aria-hidden="true"
             className="absolute left-3 top-1/2 -translate-y-1/2 text-[#61705d]"
@@ -81,7 +83,7 @@ export function TopStories({ stories }: TopStoriesProps) {
             className="h-11 w-full rounded-md border border-[#cbd4c4] bg-white pl-10 pr-3 text-sm text-[#17201a] outline-none transition placeholder:text-[#74806e] focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
             id="story-search"
             onChange={(event) => handleQueryChange(event.target.value)}
-            placeholder="Search by title, author, or topic"
+            placeholder={t("common.search")}
             type="search"
             value={query}
           />
@@ -109,7 +111,7 @@ export function TopStories({ stories }: TopStoriesProps) {
         </p>
         <div className="flex items-center gap-2">
           <button
-            aria-label="Previous page"
+            aria-label={t("common.previousPage")}
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#cbd4c4] bg-white text-[#34423a] transition hover:bg-[#e7ebe2] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={currentPage === 1}
             onClick={() => setPage((value) => Math.max(1, value - 1))}
@@ -121,7 +123,7 @@ export function TopStories({ stories }: TopStoriesProps) {
             Page {currentPage} of {pageCount}
           </span>
           <button
-            aria-label="Next page"
+            aria-label={t("common.nextPage")}
             className="flex h-10 w-10 items-center justify-center rounded-md border border-[#cbd4c4] bg-white text-[#34423a] transition hover:bg-[#e7ebe2] disabled:cursor-not-allowed disabled:opacity-45"
             disabled={currentPage === pageCount}
             onClick={() => setPage((value) => Math.min(pageCount, value + 1))}

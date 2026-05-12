@@ -4,7 +4,7 @@ Guidance for agents working in this repository.
 
 ## Project Goal
 
-Create and maintain a React Next.js application styled with Tailwind CSS. The app should include Firebase integration for backend services and OpenAI integration for AI-powered features.
+Create and maintain a React Next.js application styled with Tailwind CSS. The app should include Firebase integration for backend services and Azure Foundry agent integration for AI-powered features.
 
 ## Tech Stack
 
@@ -12,7 +12,7 @@ Create and maintain a React Next.js application styled with Tailwind CSS. The ap
 - React with TypeScript
 - Tailwind CSS for styling
 - Firebase for authentication, database, storage, or hosting as needed
-- OpenAI API for AI features
+- Azure Foundry agents for AI features
 
 ## Setup Expectations
 
@@ -25,6 +25,8 @@ npx create-next-app@latest . --typescript --tailwind --eslint --app --src-dir
 Use the existing project structure if the app has already been created. Do not replace user changes or regenerate the project over existing work.
 
 After setup, create or update `Layout.md` and use it as the source of truth for the shared navigation bar, footer, and layout components.
+
+Create or update `Localization.md` when adding country, language, navigation-label, or form-label behavior. Country data belongs in `src/data/countries.json`; supported language data belongs in `src/data/languages.json`; dummy content should not be translated.
 
 Create and reference page planning files before implementing each major section:
 
@@ -44,7 +46,7 @@ These files may start blank and should be filled in as each section is designed 
 - Keep components small and focused.
 - Use Tailwind utility classes for styling before adding custom CSS.
 - Keep shared UI in `src/components`.
-- Keep Firebase and OpenAI clients in dedicated modules under `src/lib`.
+- Keep Firebase and Azure Foundry clients in dedicated modules under `src/lib`.
 - Use environment variables for secrets and service configuration.
 - Never commit API keys, Firebase private keys, or other secrets.
 
@@ -63,10 +65,12 @@ NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID=
 NEXT_PUBLIC_FIREBASE_APP_ID=
 ```
 
-Expected OpenAI variables may include:
+Expected Azure Foundry variables may include:
 
 ```bash
-OPENAI_API_KEY=
+AZURE_FOUNDRY_PROJECT_ENDPOINT=
+AZURE_FOUNDRY_AGENT_NAME=
+AZURE_FOUNDRY_AGENT_VERSION=
 ```
 
 Only expose variables with `NEXT_PUBLIC_` when they are safe to send to the browser.
@@ -80,11 +84,12 @@ Only expose variables with `NEXT_PUBLIC_` when they are safe to send to the brow
 - Keep Firestore and Storage access behind clear helper functions where practical.
 - Apply Firebase security rules for any user-generated data.
 
-## OpenAI Integration
+## Azure Foundry Integration
 
-- Call OpenAI from server-side code only, such as Route Handlers or Server Actions.
-- Do not call OpenAI directly from client components.
-- Keep OpenAI client setup in `src/lib/openai.ts`.
+- Call Azure Foundry agents from server-side code only, such as Route Handlers or Server Actions.
+- Do not call Azure Foundry directly from client components.
+- Keep Azure Foundry client setup in `src/lib/foundry.ts`.
+- Use `DefaultAzureCredential` for local Azure authentication unless a more specific credential is required.
 - Validate and sanitize user input before sending it to the API.
 - Return only the data the UI needs.
 - Handle API errors gracefully and avoid exposing internal error details to users.
@@ -116,7 +121,7 @@ src/
     firebase/
       client.ts
       admin.ts
-    openai.ts
+    foundry.ts
   types/
 ```
 

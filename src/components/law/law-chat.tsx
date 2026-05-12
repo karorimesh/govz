@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { SendHorizonal } from "lucide-react";
+import { useLocalization } from "@/components/localization/localization-provider";
 
 type Law = {
   title: string;
@@ -20,6 +21,7 @@ type LawChatProps = {
 };
 
 export function LawChat({ laws }: LawChatProps) {
+  const { t } = useLocalization();
   const [prompt, setPrompt] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
 
@@ -113,19 +115,19 @@ export function LawChat({ laws }: LawChatProps) {
           onSubmit={handleSubmit}
         >
           <label className="sr-only" htmlFor="law-prompt">
-            Ask a law question
+            {t("form.message")}
           </label>
           <div className="flex gap-3">
             <input
               className="h-12 min-w-0 flex-1 rounded-md border border-[#cbd4c4] bg-white px-4 text-sm text-[#17201a] outline-none transition placeholder:text-[#74806e] focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
               id="law-prompt"
               onChange={(event) => setPrompt(event.target.value)}
-              placeholder="Ask about a law, bill, right, obligation, or implementation timeline"
+              placeholder={t("form.message")}
               type="text"
               value={prompt}
             />
             <button
-              aria-label="Send law question"
+              aria-label={t("common.submit")}
               className="flex h-12 w-12 shrink-0 items-center justify-center rounded-md bg-[#173c32] text-white transition hover:bg-[#245548] disabled:cursor-not-allowed disabled:opacity-50"
               disabled={!prompt.trim()}
               type="submit"

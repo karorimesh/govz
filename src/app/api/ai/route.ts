@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createOpenAIClient } from "@/lib/openai";
+import { generateFoundryAgentResponse } from "@/lib/foundry";
 
 export async function POST(request: Request) {
   const body = (await request.json().catch(() => null)) as {
@@ -15,34 +15,23 @@ export async function POST(request: Request) {
     );
   }
 
-  if (!process.env.OPENAI_API_KEY) {
+  if (
+    !process.env.AZURE_FOUNDRY_PROJECT_ENDPOINT ||
+    !process.env.AZURE_FOUNDRY_AGENT_NAME
+  ) {
     return NextResponse.json(
-      { error: "OPENAI_API_KEY is not configured." },
+      { error: "Azure Foundry agent is not configured." },
       { status: 503 },
     );
   }
 
   try {
-    const client = createOpenAIClient();
-    const response = await client.responses.create({
-      model: process.env.OPENAI_MODEL ?? "gpt-4.1-mini",
-      input: [
-        {
-          role: "system",
-          content:
-            "You are GOVZ, a concise civic services assistant. Provide practical, plain-language guidance for government service staff.",
-        },
-        {
-          role: "user",
-          content: prompt.slice(0, 2000),
-        },
-      ],
-    });
+    const answer = await generateFoundryAgentResponse(prompt.slice(0, 2000));
 
-    return NextResponse.json({ answer: response.output_text });
+    return NextResponse.json({ answer });
   } catch {
     return NextResponse.json(
-      { error: "The assistant is unavailable right now." },
+      { error: "The Azure Foundry assistant is unavailable right now." },
       { status: 500 },
     );
   }

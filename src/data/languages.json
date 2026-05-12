@@ -1,0 +1,26 @@
+[
+  {
+    "name": "English",
+    "nativeName": "English",
+    "code": "en",
+    "direction": "ltr"
+  },
+  {
+    "name": "French",
+    "nativeName": "Français",
+    "code": "fr",
+    "direction": "ltr"
+  },
+  {
+    "name": "Arabic",
+    "nativeName": "العربية",
+    "code": "ar",
+    "direction": "rtl"
+  },
+  {
+    "name": "Mandarin",
+    "nativeName": "中文",
+    "code": "zh",
+    "direction": "ltr"
+  }
+]

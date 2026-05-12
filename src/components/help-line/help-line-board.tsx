@@ -8,6 +8,8 @@ import {
   MessageSquarePlus,
   Search,
 } from "lucide-react";
+import { useLocalization } from "@/components/localization/localization-provider";
+import { translateLabel } from "@/lib/localization/labels";
 
 type MessageCategory =
   | "complaint"
@@ -120,6 +122,7 @@ export function HelpLineBoard({
   const [statusFilter, setStatusFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [notice, setNotice] = useState("");
+  const { t } = useLocalization();
 
   const departmentById = useMemo(
     () => new Map(departments.map((department) => [department.id, department])),
@@ -271,7 +274,7 @@ export function HelpLineBoard({
 
           <FormInput label="Title" name="title" required />
           <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-            Message
+            {t("form.message")}
             <textarea
               className="min-h-32 rounded-md border border-[#cbd4c4] bg-white p-3 text-sm outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
               name="message"
@@ -322,7 +325,7 @@ export function HelpLineBoard({
             className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
             type="submit"
           >
-            Submit message
+            {t("common.submit")}
           </button>
         </form>
       </div>
@@ -354,7 +357,7 @@ export function HelpLineBoard({
                 className="h-11 w-full rounded-md border border-[#cbd4c4] bg-white pl-10 pr-3 text-sm text-[#17201a] outline-none transition placeholder:text-[#74806e] focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
                 id="help-search"
                 onChange={(event) => setQuery(event.target.value)}
-                placeholder="Search messages, offices, or locations"
+                placeholder={t("common.search")}
                 type="search"
                 value={query}
               />
@@ -526,9 +529,11 @@ function FormInput({
   required?: boolean;
   type?: string;
 }) {
+  const { t } = useLocalization();
+
   return (
     <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-      {label}
+      {translateLabel(t, label)}
       <input
         className="h-11 rounded-md border border-[#cbd4c4] bg-white px-3 text-sm outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
         name={name}
@@ -548,9 +553,11 @@ function SelectInput({
   name: string;
   options: readonly string[];
 }) {
+  const { t } = useLocalization();
+
   return (
     <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-      {label}
+      {translateLabel(t, label)}
       <select
         className="h-11 rounded-md border border-[#cbd4c4] bg-white px-3 text-sm capitalize outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
         defaultValue={options[0]}
@@ -580,9 +587,11 @@ function FilterSelect({
   options: readonly string[];
   value: string;
 }) {
+  const { t } = useLocalization();
+
   return (
     <label className="grid gap-2 text-sm font-medium text-[#34423a]">
-      {label}
+      {translateLabel(t, label)}
       <select
         className="h-11 rounded-md border border-[#cbd4c4] bg-white px-3 text-sm capitalize outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
         onChange={(event) => onChange(event.target.value)}
