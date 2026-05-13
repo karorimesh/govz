@@ -6,6 +6,14 @@ export type HomepageStory = {
   link: string;
 };
 
+const genericGovernanceImages = [
+  "/governance-news-1.jpg",
+  "/governance-news-2.jpg",
+  "/governance-news-3.jpg",
+  "/governance-news-4.jpg",
+  "/governance-news-5.jpg",
+];
+
 export function buildHomepageGovernanceNewsPrompt({
   selectedCountry,
   selectedLanguage,
@@ -39,7 +47,14 @@ Response constraints:
 - Results must be specific to ${selectedCountry}.
 - Output text must be in ${selectedLanguage}.
 - summary must be no more than 200 words.
-- imgLink should be a direct image URL when available; otherwise use an empty string.
+- imgLink must always be populated.
+- imgLink should be a direct image URL when available.
+- If a direct image URL is unavailable, assign these public fallback images by story position:
+  - Story 1: ${genericGovernanceImages[0]}
+  - Story 2: ${genericGovernanceImages[1]}
+  - Story 3: ${genericGovernanceImages[2]}
+  - Story 4: ${genericGovernanceImages[3]}
+  - Story 5: ${genericGovernanceImages[4]}
 - author should be the journalist, agency, publication, or official source when available.
 - link must be the source URL for the story.
 - Do not translate proper nouns, publication names, or source names unless they have a common official translation.
@@ -56,7 +71,7 @@ export function parseHomepageStories(output: string): HomepageStory[] {
   }
 
   return parsed
-    .map((item) => normalizeStory(item))
+    .map((item, index) => normalizeStory(item, index))
     .filter((story): story is HomepageStory => Boolean(story));
 }
 
@@ -78,7 +93,7 @@ function extractJson(output: string) {
   return trimmed;
 }
 
-function normalizeStory(item: unknown) {
+function normalizeStory(item: unknown, index: number) {
   if (!item || typeof item !== "object") {
     return null;
   }
@@ -95,7 +110,9 @@ function normalizeStory(item: unknown) {
 
   return {
     title,
-    imgLink: toStringValue(record.imgLink),
+    imgLink:
+      toStringValue(record.imgLink) ||
+      genericGovernanceImages[index % genericGovernanceImages.length],
     summary,
     author,
     link,

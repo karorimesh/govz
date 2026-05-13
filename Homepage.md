@@ -9,7 +9,7 @@ Each story uses this shape:
 ```ts
 {
   title: string;
-  imgLink: string;
+  imgLink: string; // direct image URL or one of the public fallback images
   summary: string; // up to 200 words
   author: string;
   link: string;
@@ -24,6 +24,12 @@ Each story uses this shape:
 - Include search functionality for title, summary, and author.
 - Include pagination for browsing more stories.
 - Story cards should link to their source URL.
+- If story images are unavailable, assign the five public fallback images in order:
+  - `/governance-news-1.jpg`
+  - `/governance-news-2.jpg`
+  - `/governance-news-3.jpg`
+  - `/governance-news-4.jpg`
+  - `/governance-news-5.jpg`
 
 ## Azure Foundry Integration
 

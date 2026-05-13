@@ -35,19 +35,29 @@ export function TopStories() {
       setPage(1);
 
       try {
+        const requestPayload = {
+          selectedCountry: country.name,
+          selectedLanguage: language.name,
+        };
+
+        console.log("[homepage-stories] request", requestPayload);
+
         const response = await fetch("/api/homepage-stories", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            selectedCountry: country.name,
-            selectedLanguage: language.name,
-          }),
+          body: JSON.stringify(requestPayload),
           signal: controller.signal,
         });
         const data = (await response.json()) as {
           stories?: Story[];
           error?: string;
         };
+
+        console.log("[homepage-stories] response", {
+          ok: response.ok,
+          status: response.status,
+          data,
+        });
 
         if (!response.ok) {
           throw new Error(data.error ?? "Unable to load stories.");
@@ -60,6 +70,7 @@ export function TopStories() {
           return;
         }
 
+        console.error("[homepage-stories] request failed", loadError);
         setStatus("error");
         setError(
           loadError instanceof Error

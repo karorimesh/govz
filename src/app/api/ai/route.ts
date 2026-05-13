@@ -30,7 +30,9 @@ export async function POST(request: Request) {
     const answer = await generateFoundryAgentResponse(prompt.slice(0, 2000));
 
     return NextResponse.json({ answer });
-  } catch {
+  } catch (error) {
+    console.error("[api/ai] response error", error);
+
     return NextResponse.json(
       { error: "The Azure Foundry assistant is unavailable right now." },
       { status: 500 },

@@ -26,7 +26,7 @@ async function main() {
           conversation: conversation.id,
       },
       {
-          body: { agent: { name: agentName, version: agentVersion, type: "agent_reference" } },
+          body: { agent_reference: { name: agentName, version: agentVersion, type: "agent_reference" } },
       },
   );
   console.log("Response output: ");
