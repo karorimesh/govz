@@ -11,6 +11,7 @@ Each opinion poll should use this shape:
 ```ts
 {
   id: string;
+  country: string;
   title: string;
   description: string;
   category: "policy" | "service" | "budget" | "law" | "community" | "other";
@@ -45,6 +46,7 @@ Each public response to an opinion poll should use this shape:
 ```ts
 {
   id: string;
+  country: string;
   pollId: string;
   participant: {
     publicId?: string;
@@ -68,6 +70,7 @@ The general public should be able to react to published opinions or comments.
 ```ts
 {
   id: string;
+  country: string;
   pollId: string;
   opinionId: string;
   reaction: "like" | "dislike" | "support" | "concern" | "flag";
@@ -79,6 +82,7 @@ The general public should be able to react to published opinions or comments.
 ## Interface Requirements
 
 - Display opinion polls in card form.
+- Filter displayed opinion polls by the selected country.
 - Show poll title, description, category, region, dates, and status.
 - Show the available input types for each poll.
 - Provide search across title, description, category, region, tags, and status.
@@ -92,6 +96,9 @@ The general public should be able to react to published opinions or comments.
 - Display submitted public opinions in a list.
 - Allow the public to react to submitted opinions using the public reaction schema.
 - Include a way to create a new opinion poll using the poll schema.
+- New and updated opinion polls must save the selected country in `country`.
+- Public input submissions must save the selected country in `country`.
+- Public reactions must save the selected country in `country`.
 - Use dummy data until a backend is connected.
 
 ## Validation Notes

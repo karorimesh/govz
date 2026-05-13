@@ -1,76 +1,37 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   ChevronLeft,
   ChevronRight,
   FilePlus2,
+  Pencil,
   Search,
+  Trash2,
   X,
 } from "lucide-react";
 import { useLocalization } from "@/components/localization/localization-provider";
+import {
+  createOpinionPoll,
+  createPublicInput,
+  createPublicReaction,
+  deleteOpinionPoll,
+  listOpinionPolls,
+  listPublicInputs,
+  listPublicReactions,
+  updateOpinionPoll,
+  type InputType,
+  type OpinionReaction,
+  type Poll,
+  type PollCategory,
+  type PollInput,
+  type PollStatus,
+  type PublicInput,
+  type PublicReaction,
+  type SentimentReaction,
+} from "@/lib/firebase/opinion-polls";
 import { translateLabel } from "@/lib/localization/labels";
-
-type PollCategory = "policy" | "service" | "budget" | "law" | "community" | "other";
-type PollStatus = "open" | "upcoming" | "closed";
-type InputType = "vote" | "rating" | "reaction" | "comment";
-type SentimentReaction = "support" | "oppose" | "neutral" | "concerned" | "excited";
-type OpinionReaction = "like" | "dislike" | "support" | "concern" | "flag";
-
-type Poll = {
-  id: string;
-  title: string;
-  description: string;
-  category: PollCategory;
-  status: PollStatus;
-  region: string;
-  createdBy: string;
-  dates: {
-    opensAt: string;
-    closesAt: string;
-  };
-  inputTypes: readonly InputType[];
-  voteOptions?: readonly string[];
-  ratingScale?: {
-    min: number;
-    max: number;
-    labels?: {
-      min: string;
-      max: string;
-    };
-  };
-  reactionOptions?: readonly SentimentReaction[];
-  allowAnonymous: boolean;
-  allowMultipleResponses: boolean;
-  tags: readonly string[];
-};
-
-type PublicInput = {
-  id: string;
-  pollId: string;
-  participant: {
-    publicId?: string;
-    name?: string;
-    region?: string;
-    phone?: string;
-    email?: string;
-  };
-  vote?: string;
-  rating?: number;
-  reaction?: SentimentReaction;
-  comment?: string;
-  submittedAt: string;
-};
-
-type PublicReaction = {
-  id: string;
-  pollId: string;
-  opinionId: string;
-  reaction: OpinionReaction;
-  participantId?: string;
-  submittedAt: string;
-};
 
 type PollForm = {
   title: string;
@@ -93,10 +54,7 @@ type PollForm = {
   tags: string;
 };
 
-type OpinionPollsBoardProps = {
-  initialOpinions: PublicInput[];
-  initialPolls: Poll[];
-};
+type LoadingStatus = "loading" | "ready" | "error";
 
 const pollsPerPage = 6;
 const reactionChoices: SentimentReaction[] = [
@@ -146,20 +104,69 @@ const blankPollForm: PollForm = {
   tags: "",
 };
 
-export function OpinionPollsBoard({
-  initialOpinions,
-  initialPolls,
-}: OpinionPollsBoardProps) {
-  const [polls, setPolls] = useState(initialPolls);
-  const [opinions, setOpinions] = useState(initialOpinions);
-  const [opinionReactions, setOpinionReactions] = useState<PublicReaction[]>([]);
+export function OpinionPollsBoard() {
+  const { country, t } = useLocalization();
+  const [polls, setPolls] = useState<Poll[]>([]);
+  const [status, setStatus] = useState<LoadingStatus>("loading");
+  const [error, setError] = useState("");
+  const [opinions, setOpinions] = useState<PublicInput[]>([]);
+  const [opinionsStatus, setOpinionsStatus] =
+    useState<LoadingStatus>("loading");
+  const [opinionsError, setOpinionsError] = useState("");
+  const [opinionReactions, setOpinionReactions] = useState<PublicReaction[]>(
+    [],
+  );
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
   const [activePoll, setActivePoll] = useState<Poll | null>(null);
+  const [editingPoll, setEditingPoll] = useState<Poll | null>(null);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [notice, setNotice] = useState("");
   const [pollForm, setPollForm] = useState<PollForm>(blankPollForm);
-  const { t } = useLocalization();
+  const [editForm, setEditForm] = useState<PollForm>(blankPollForm);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadPolls() {
+      setStatus("loading");
+      setError("");
+      setNotice("");
+      setPolls([]);
+      setPage(1);
+      setActivePoll(null);
+
+      try {
+        const loadedPolls = await listOpinionPolls(country.name);
+
+        if (!isActive) {
+          return;
+        }
+
+        setPolls(sortPolls(loadedPolls));
+        setStatus("ready");
+      } catch (loadError) {
+        if (!isActive) {
+          return;
+        }
+
+        console.error("[opinion-polls] list failed", loadError);
+        setStatus("error");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load opinion polls right now.",
+        );
+      }
+    }
+
+    loadPolls();
+
+    return () => {
+      isActive = false;
+    };
+  }, [country.name]);
 
   const filteredPolls = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -176,6 +183,7 @@ export function OpinionPollsBoard({
         poll.region,
         poll.status,
         poll.createdBy,
+        poll.country,
         poll.tags.join(" "),
       ]
         .join(" ")
@@ -189,62 +197,151 @@ export function OpinionPollsBoard({
   const pageStart = (currentPage - 1) * pollsPerPage;
   const visiblePolls = filteredPolls.slice(pageStart, pageStart + pollsPerPage);
 
-  function createPoll(event: FormEvent<HTMLFormElement>) {
+  async function openPoll(poll: Poll) {
+    setActivePoll(poll);
+    setOpinions([]);
+    setOpinionReactions([]);
+    setOpinionsStatus("loading");
+    setOpinionsError("");
+
+    try {
+      const [loadedOpinions, loadedReactions] = await Promise.all([
+        listPublicInputs({ country: country.name, pollId: poll.id }),
+        listPublicReactions({ country: country.name, pollId: poll.id }),
+      ]);
+
+      setOpinions(sortOpinions(loadedOpinions));
+      setOpinionReactions(loadedReactions);
+      setOpinionsStatus("ready");
+    } catch (loadError) {
+      console.error("[opinion-polls] input list failed", loadError);
+      setOpinionsStatus("error");
+      setOpinionsError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load public opinions right now.",
+      );
+    }
+  }
+
+  async function createPoll(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const inputTypes = Object.entries(pollForm.inputTypes)
-      .filter(([, enabled]) => enabled)
-      .map(([type]) => type as InputType);
+    await submitPoll({
+      form: pollForm,
+      onSuccess: (savedPoll) => {
+        setPolls((currentPolls) => sortPolls([savedPoll, ...currentPolls]));
+        setPollForm(blankPollForm);
+        setIsCreateOpen(false);
+        setPage(1);
+        setNotice(`${savedPoll.title} was created for ${country.name}.`);
+      },
+    });
+  }
 
-    if (inputTypes.length === 0) {
+  async function updatePoll(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!editingPoll) {
+      return;
+    }
+
+    await submitPoll({
+      existingId: editingPoll.id,
+      form: editForm,
+      onSuccess: (savedPoll) => {
+        setPolls((currentPolls) =>
+          sortPolls(
+            currentPolls.map((poll) =>
+              poll.id === savedPoll.id ? savedPoll : poll,
+            ),
+          ),
+        );
+        setEditingPoll(null);
+        setNotice(`${savedPoll.title} was updated for ${country.name}.`);
+      },
+    });
+  }
+
+  async function submitPoll({
+    existingId,
+    form,
+    onSuccess,
+  }: {
+    existingId?: string;
+    form: PollForm;
+    onSuccess: (poll: Poll) => void;
+  }) {
+    const pollInput = toPollInput(form, country.name);
+
+    if (!pollInput.inputTypes.length) {
       setNotice("Select at least one public input type.");
       return;
     }
 
-    const newPoll: Poll = {
-      id: crypto.randomUUID(),
-      title: pollForm.title.trim(),
-      description: pollForm.description.trim(),
-      category: pollForm.category,
-      status: pollForm.status,
-      region: pollForm.region.trim(),
-      createdBy: pollForm.createdBy.trim(),
-      dates: {
-        opensAt: pollForm.opensAt,
-        closesAt: pollForm.closesAt,
-      },
-      inputTypes,
-      voteOptions: inputTypes.includes("vote")
-        ? splitList(pollForm.voteOptions)
-        : undefined,
-      ratingScale: inputTypes.includes("rating")
-        ? {
-            min: Number(pollForm.ratingMin),
-            max: Number(pollForm.ratingMax),
-            labels: {
-              min: pollForm.ratingMinLabel,
-              max: pollForm.ratingMaxLabel,
-            },
-          }
-        : undefined,
-      reactionOptions: inputTypes.includes("reaction")
-        ? Object.entries(pollForm.reactionOptions)
-            .filter(([, enabled]) => enabled)
-            .map(([reaction]) => reaction as SentimentReaction)
-        : undefined,
-      allowAnonymous: pollForm.allowAnonymous,
-      allowMultipleResponses: pollForm.allowMultipleResponses,
-      tags: splitList(pollForm.tags),
-    };
+    if (pollInput.inputTypes.includes("vote") && !pollInput.voteOptions?.length) {
+      setNotice("Add vote options for polls that support voting.");
+      return;
+    }
 
-    setPolls((currentPolls) => [newPoll, ...currentPolls]);
-    setPollForm(blankPollForm);
-    setIsCreateOpen(false);
-    setPage(1);
-    setNotice(`${newPoll.title} was created locally.`);
+    if (
+      pollInput.inputTypes.includes("reaction") &&
+      !pollInput.reactionOptions?.length
+    ) {
+      setNotice("Add reaction options for polls that support reactions.");
+      return;
+    }
+
+    setIsSubmitting(true);
+    setNotice("");
+
+    try {
+      const savedPoll = existingId
+        ? await updateOpinionPoll(existingId, pollInput)
+        : await createOpinionPoll(pollInput);
+
+      onSuccess(savedPoll);
+    } catch (submitError) {
+      console.error("[opinion-polls] save failed", submitError);
+      setNotice(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to save opinion poll right now.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function submitOpinion(
+  async function deletePoll(poll: Poll) {
+    const confirmed = window.confirm(`Delete "${poll.title}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setNotice("");
+
+    try {
+      await deleteOpinionPoll(poll.id);
+      setPolls((currentPolls) =>
+        currentPolls.filter((currentPoll) => currentPoll.id !== poll.id),
+      );
+      setActivePoll((currentPoll) =>
+        currentPoll?.id === poll.id ? null : currentPoll,
+      );
+      setNotice(`${poll.title} was deleted for ${country.name}.`);
+    } catch (deleteError) {
+      console.error("[opinion-polls] delete failed", deleteError);
+      setNotice(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete opinion poll right now.",
+      );
+    }
+  }
+
+  async function submitOpinion(
     event: FormEvent<HTMLFormElement>,
     poll: Poll,
     onComplete: () => void,
@@ -252,44 +349,79 @@ export function OpinionPollsBoard({
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
 
-    const opinion: PublicInput = {
-      id: crypto.randomUUID(),
-      pollId: poll.id,
-      participant: {
-        publicId: String(formData.get("publicId") ?? "").trim() || undefined,
-        name: String(formData.get("name") ?? "").trim() || undefined,
-        region: String(formData.get("region") ?? "").trim() || undefined,
-        phone: String(formData.get("phone") ?? "").trim() || undefined,
-        email: String(formData.get("email") ?? "").trim() || undefined,
-      },
-      vote: String(formData.get("vote") ?? "").trim() || undefined,
-      rating: formData.get("rating")
-        ? Number(formData.get("rating"))
-        : undefined,
-      reaction:
-        (String(formData.get("reaction") ?? "") as SentimentReaction) ||
-        undefined,
-      comment: String(formData.get("comment") ?? "").trim() || undefined,
-      submittedAt: "Just now",
-    };
+    setIsSubmitting(true);
+    setNotice("");
 
-    setOpinions((currentOpinions) => [opinion, ...currentOpinions]);
-    setNotice("Your public input was recorded locally.");
-    onComplete();
+    try {
+      const savedOpinion = await createPublicInput({
+        country: country.name,
+        pollId: poll.id,
+        participant: {
+          publicId: String(formData.get("publicId") ?? "").trim() || undefined,
+          name: String(formData.get("name") ?? "").trim() || undefined,
+          region: String(formData.get("region") ?? "").trim() || undefined,
+          phone: String(formData.get("phone") ?? "").trim() || undefined,
+          email: String(formData.get("email") ?? "").trim() || undefined,
+        },
+        vote: String(formData.get("vote") ?? "").trim() || undefined,
+        rating: formData.get("rating")
+          ? Number(formData.get("rating"))
+          : undefined,
+        reaction:
+          (String(formData.get("reaction") ?? "") as SentimentReaction) ||
+          undefined,
+        comment: String(formData.get("comment") ?? "").trim() || undefined,
+        submittedAt: new Date().toISOString(),
+      });
+
+      setOpinions((currentOpinions) =>
+        sortOpinions([savedOpinion, ...currentOpinions]),
+      );
+      setNotice(`Your public input was recorded for ${country.name}.`);
+      onComplete();
+    } catch (submitError) {
+      console.error("[opinion-polls] input save failed", submitError);
+      setNotice(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to record public input right now.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
-  function reactToOpinion(opinion: PublicInput, reaction: OpinionReaction) {
-    setOpinionReactions((currentReactions) => [
-      {
-        id: crypto.randomUUID(),
+  async function reactToOpinion(opinion: PublicInput, reaction: OpinionReaction) {
+    setNotice("");
+
+    try {
+      const savedReaction = await createPublicReaction({
+        country: country.name,
         pollId: opinion.pollId,
         opinionId: opinion.id,
         reaction,
-        submittedAt: "Just now",
-      },
-      ...currentReactions,
-    ]);
-    setNotice(`Reaction recorded: ${reaction}.`);
+        participantId: opinion.participant.publicId,
+        submittedAt: new Date().toISOString(),
+      });
+
+      setOpinionReactions((currentReactions) => [
+        savedReaction,
+        ...currentReactions,
+      ]);
+      setNotice(`Reaction recorded for ${country.name}: ${reaction}.`);
+    } catch (submitError) {
+      console.error("[opinion-polls] reaction save failed", submitError);
+      setNotice(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to record reaction right now.",
+      );
+    }
+  }
+
+  function openEdit(poll: Poll) {
+    setEditingPoll(poll);
+    setEditForm(toForm(poll));
   }
 
   return (
@@ -302,6 +434,9 @@ export function OpinionPollsBoard({
           <h1 className="mt-2 text-3xl font-semibold text-[#17201a] sm:text-4xl">
             Opinion Polls
           </h1>
+          <p className="mt-3 text-sm text-[#61705d]">
+            Showing opinion polls for {country.name}
+          </p>
         </div>
 
         <div className="flex flex-col gap-3 sm:flex-row">
@@ -341,20 +476,37 @@ export function OpinionPollsBoard({
         </div>
       ) : null}
 
-      <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
-        {visiblePolls.map((poll) => (
-          <PollCard
-            key={poll.id}
-            opinionCount={opinions.filter((opinion) => opinion.pollId === poll.id).length}
-            poll={poll}
-            onOpen={() => setActivePoll(poll)}
-          />
-        ))}
-      </div>
+      {status === "loading" ? (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, index) => (
+            <CardSkeleton key={index} />
+          ))}
+        </div>
+      ) : null}
 
-      {visiblePolls.length === 0 ? (
+      {status === "error" ? (
         <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
-          No opinion polls match your search.
+          {error}
+        </div>
+      ) : null}
+
+      {status === "ready" ? (
+        <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
+          {visiblePolls.map((poll) => (
+            <PollCard
+              key={poll.id}
+              onDelete={() => deletePoll(poll)}
+              onEdit={() => openEdit(poll)}
+              onOpen={() => openPoll(poll)}
+              poll={poll}
+            />
+          ))}
+        </div>
+      ) : null}
+
+      {status === "ready" && visiblePolls.length === 0 ? (
+        <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
+          No opinion polls match your search for {country.name}.
         </div>
       ) : null}
 
@@ -389,21 +541,39 @@ export function OpinionPollsBoard({
 
       {activePoll ? (
         <PollDetailsModal
+          disabled={isSubmitting}
           onClose={() => setActivePoll(null)}
           onReact={reactToOpinion}
           onSubmit={submitOpinion}
           opinionReactions={opinionReactions}
-          opinions={opinions.filter((opinion) => opinion.pollId === activePoll.id)}
+          opinions={opinions}
+          opinionsError={opinionsError}
+          opinionsStatus={opinionsStatus}
           poll={activePoll}
         />
       ) : null}
 
       {isCreateOpen ? (
-        <CreatePollModal
+        <PollFormModal
+          disabled={isSubmitting}
           form={pollForm}
           onChange={setPollForm}
           onClose={() => setIsCreateOpen(false)}
           onSubmit={createPoll}
+          submitLabel={t("common.create")}
+          title={`Create opinion poll for ${country.name}`}
+        />
+      ) : null}
+
+      {editingPoll ? (
+        <PollFormModal
+          disabled={isSubmitting}
+          form={editForm}
+          onChange={setEditForm}
+          onClose={() => setEditingPoll(null)}
+          onSubmit={updatePoll}
+          submitLabel="Update"
+          title={`Edit ${editingPoll.title}`}
         />
       ) : null}
     </section>
@@ -411,16 +581,18 @@ export function OpinionPollsBoard({
 }
 
 function PollCard({
+  onDelete,
+  onEdit,
   onOpen,
-  opinionCount,
   poll,
 }: {
+  onDelete: () => void;
+  onEdit: () => void;
   onOpen: () => void;
-  opinionCount: number;
   poll: Poll;
 }) {
   return (
-    <article className="flex min-h-[360px] flex-col rounded-lg border border-[#d9dfd2] bg-white p-5 shadow-sm">
+    <article className="flex min-h-[390px] flex-col rounded-lg border border-[#d9dfd2] bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <span className="rounded-full bg-[#eef3e9] px-3 py-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#2f6f5e]">
           {poll.category}
@@ -461,8 +633,7 @@ function PollCard({
           </span>
         ))}
       </div>
-      <div className="mt-auto flex items-center justify-between gap-3 pt-5">
-        <span className="text-sm text-[#61705d]">{opinionCount} opinions</span>
+      <div className="mt-auto grid grid-cols-2 gap-3 pt-5">
         <button
           className="h-10 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
           onClick={onOpen}
@@ -470,19 +641,39 @@ function PollCard({
         >
           Open Poll
         </button>
+        <button
+          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#cbd4c4] px-4 text-sm font-semibold text-[#34423a] transition hover:bg-[#e7ebe2]"
+          onClick={onEdit}
+          type="button"
+        >
+          <Pencil aria-hidden="true" size={16} />
+          Edit
+        </button>
+        <button
+          className="col-span-2 inline-flex h-10 items-center justify-center gap-2 rounded-md border border-[#e3c6b8] px-4 text-sm font-semibold text-[#9a3412] transition hover:bg-[#fff7ed]"
+          onClick={onDelete}
+          type="button"
+        >
+          <Trash2 aria-hidden="true" size={16} />
+          Delete
+        </button>
       </div>
     </article>
   );
 }
 
 function PollDetailsModal({
+  disabled,
   onClose,
   onReact,
   onSubmit,
   opinionReactions,
   opinions,
+  opinionsError,
+  opinionsStatus,
   poll,
 }: {
+  disabled: boolean;
   onClose: () => void;
   onReact: (opinion: PublicInput, reaction: OpinionReaction) => void;
   onSubmit: (
@@ -492,6 +683,8 @@ function PollDetailsModal({
   ) => void;
   opinionReactions: PublicReaction[];
   opinions: PublicInput[];
+  opinionsError: string;
+  opinionsStatus: LoadingStatus;
   poll: Poll;
 }) {
   const [isResponding, setIsResponding] = useState(false);
@@ -502,6 +695,7 @@ function PollDetailsModal({
         <section className="space-y-4">
           <p className="text-sm leading-6 text-[#53604f]">{poll.description}</p>
           <div className="grid gap-3 sm:grid-cols-2">
+            <Detail label="Country" value={poll.country} />
             <Detail label="Category" value={poll.category} />
             <Detail label="Status" value={poll.status} />
             <Detail label="Region" value={poll.region} />
@@ -532,6 +726,7 @@ function PollDetailsModal({
 
         {isResponding ? (
           <OpinionInputForm
+            disabled={disabled}
             onSubmit={(event) =>
               onSubmit(event, poll, () => setIsResponding(false))
             }
@@ -544,7 +739,22 @@ function PollDetailsModal({
             Public opinions
           </h3>
           <div className="mt-4 grid gap-3">
-            {opinions.length ? (
+            {opinionsStatus === "loading" ? (
+              <>
+                {Array.from({ length: 3 }).map((_, index) => (
+                  <div
+                    className="h-24 animate-pulse rounded-md bg-[#e1e7dc]"
+                    key={index}
+                  />
+                ))}
+              </>
+            ) : null}
+            {opinionsStatus === "error" ? (
+              <p className="rounded-md bg-[#f7f8f3] p-4 text-sm text-[#9a3412]">
+                {opinionsError}
+              </p>
+            ) : null}
+            {opinionsStatus === "ready" && opinions.length ? (
               opinions.map((opinion) => (
                 <OpinionCard
                   key={opinion.id}
@@ -555,11 +765,12 @@ function PollDetailsModal({
                   )}
                 />
               ))
-            ) : (
+            ) : null}
+            {opinionsStatus === "ready" && !opinions.length ? (
               <p className="rounded-md bg-[#f7f8f3] p-4 text-sm text-[#61705d]">
                 No public opinions have been submitted for this poll yet.
               </p>
-            )}
+            ) : null}
           </div>
         </section>
       </div>
@@ -568,9 +779,11 @@ function PollDetailsModal({
 }
 
 function OpinionInputForm({
+  disabled,
   onSubmit,
   poll,
 }: {
+  disabled: boolean;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
   poll: Poll;
 }) {
@@ -633,7 +846,8 @@ function OpinionInputForm({
       ) : null}
 
       <button
-        className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
+        className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548] disabled:cursor-not-allowed disabled:opacity-50"
+        disabled={disabled}
         type="submit"
       >
         {t("common.submit")}
@@ -658,7 +872,9 @@ function OpinionCard({
           <p className="text-sm font-semibold text-[#17201a]">
             {opinion.participant.name ?? "Anonymous participant"}
           </p>
-          <p className="text-xs text-[#61705d]">{opinion.submittedAt}</p>
+          <p className="text-xs text-[#61705d]">
+            {formatSubmittedAt(opinion.submittedAt)}
+          </p>
         </div>
         <div className="flex flex-wrap gap-2 text-xs text-[#61705d]">
           {opinion.vote ? <span>Vote: {opinion.vote}</span> : null}
@@ -667,7 +883,9 @@ function OpinionCard({
         </div>
       </div>
       {opinion.comment ? (
-        <p className="mt-3 text-sm leading-6 text-[#53604f]">{opinion.comment}</p>
+        <p className="mt-3 text-sm leading-6 text-[#53604f]">
+          {opinion.comment}
+        </p>
       ) : null}
       <div className="mt-4 flex flex-wrap items-center gap-2">
         {opinionReactionChoices.map((reaction) => (
@@ -685,16 +903,22 @@ function OpinionCard({
   );
 }
 
-function CreatePollModal({
+function PollFormModal({
+  disabled,
   form,
   onChange,
   onClose,
   onSubmit,
+  submitLabel,
+  title,
 }: {
+  disabled: boolean;
   form: PollForm;
   onChange: (form: PollForm) => void;
   onClose: () => void;
   onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  submitLabel: string;
+  title: string;
 }) {
   const { t } = useLocalization();
 
@@ -717,7 +941,7 @@ function CreatePollModal({
   }
 
   return (
-    <Modal title="Create opinion poll" onClose={onClose}>
+    <Modal title={title} onClose={onClose}>
       <form className="grid gap-4" onSubmit={onSubmit}>
         <FormInput
           label="Title"
@@ -882,10 +1106,11 @@ function CreatePollModal({
         />
 
         <button
-          className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
+          className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548] disabled:cursor-not-allowed disabled:opacity-50"
+          disabled={disabled}
           type="submit"
         >
-          {t("common.create")}
+          {submitLabel}
         </button>
       </form>
     </Modal>
@@ -1030,8 +1255,113 @@ function Checkbox({
   );
 }
 
+function CardSkeleton() {
+  return (
+    <article className="min-h-[390px] rounded-lg border border-[#d9dfd2] bg-white p-5 shadow-sm">
+      <div className="flex justify-between">
+        <div className="h-6 w-28 animate-pulse rounded-full bg-[#e1e7dc]" />
+        <div className="h-6 w-20 animate-pulse rounded-full bg-[#e1e7dc]" />
+      </div>
+      <div className="mt-5 h-7 w-4/5 animate-pulse rounded bg-[#e1e7dc]" />
+      <div className="mt-4 space-y-2">
+        <div className="h-4 animate-pulse rounded bg-[#e1e7dc]" />
+        <div className="h-4 animate-pulse rounded bg-[#e1e7dc]" />
+        <div className="h-4 w-2/3 animate-pulse rounded bg-[#e1e7dc]" />
+      </div>
+    </article>
+  );
+}
+
+function toPollInput(form: PollForm, country: string): PollInput {
+  const inputTypes = Object.entries(form.inputTypes)
+    .filter(([, enabled]) => enabled)
+    .map(([type]) => type as InputType);
+
+  return {
+    country,
+    title: form.title.trim(),
+    description: form.description.trim(),
+    category: form.category,
+    status: form.status,
+    region: form.region.trim(),
+    createdBy: form.createdBy.trim(),
+    dates: {
+      opensAt: form.opensAt,
+      closesAt: form.closesAt,
+    },
+    inputTypes,
+    voteOptions: inputTypes.includes("vote")
+      ? splitList(form.voteOptions)
+      : undefined,
+    ratingScale: inputTypes.includes("rating")
+      ? {
+          min: Number(form.ratingMin),
+          max: Number(form.ratingMax),
+          labels: {
+            min: form.ratingMinLabel,
+            max: form.ratingMaxLabel,
+          },
+        }
+      : undefined,
+    reactionOptions: inputTypes.includes("reaction")
+      ? (Object.entries(form.reactionOptions)
+          .filter(([, enabled]) => enabled)
+          .map(([reaction]) => reaction) as SentimentReaction[])
+      : undefined,
+    allowAnonymous: form.allowAnonymous,
+    allowMultipleResponses: form.allowMultipleResponses,
+    tags: splitList(form.tags),
+  };
+}
+
+function toForm(poll: Poll): PollForm {
+  return {
+    title: poll.title,
+    description: poll.description,
+    category: poll.category,
+    status: poll.status,
+    region: poll.region,
+    createdBy: poll.createdBy,
+    opensAt: poll.dates.opensAt,
+    closesAt: poll.dates.closesAt,
+    inputTypes: {
+      vote: poll.inputTypes.includes("vote"),
+      rating: poll.inputTypes.includes("rating"),
+      reaction: poll.inputTypes.includes("reaction"),
+      comment: poll.inputTypes.includes("comment"),
+    },
+    voteOptions: poll.voteOptions?.join(", ") ?? "",
+    ratingMin: String(poll.ratingScale?.min ?? 1),
+    ratingMax: String(poll.ratingScale?.max ?? 5),
+    ratingMinLabel: poll.ratingScale?.labels?.min ?? "",
+    ratingMaxLabel: poll.ratingScale?.labels?.max ?? "",
+    reactionOptions: {
+      support: poll.reactionOptions?.includes("support") ?? false,
+      oppose: poll.reactionOptions?.includes("oppose") ?? false,
+      neutral: poll.reactionOptions?.includes("neutral") ?? false,
+      concerned: poll.reactionOptions?.includes("concerned") ?? false,
+      excited: poll.reactionOptions?.includes("excited") ?? false,
+    },
+    allowAnonymous: poll.allowAnonymous,
+    allowMultipleResponses: poll.allowMultipleResponses,
+    tags: poll.tags.join(", "),
+  };
+}
+
 function countReactions(reactions: PublicReaction[], reaction: OpinionReaction) {
   return reactions.filter((item) => item.reaction === reaction).length;
+}
+
+function sortPolls(items: Poll[]) {
+  return [...items].sort((firstItem, secondItem) =>
+    firstItem.title.localeCompare(secondItem.title),
+  );
+}
+
+function sortOpinions(items: PublicInput[]) {
+  return [...items].sort((firstItem, secondItem) =>
+    secondItem.submittedAt.localeCompare(firstItem.submittedAt),
+  );
 }
 
 function splitList(value: string) {
@@ -1039,4 +1369,14 @@ function splitList(value: string) {
     .split(",")
     .map((item) => item.trim())
     .filter(Boolean);
+}
+
+function formatSubmittedAt(value: string) {
+  if (!value) {
+    return "Submitted";
+  }
+
+  const date = new Date(value);
+
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString();
 }
