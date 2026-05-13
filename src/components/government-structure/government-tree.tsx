@@ -2,7 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import type { ReactNode } from "react";
 import {
   BadgeCheck,
@@ -17,67 +17,14 @@ import {
   UserRound,
   X,
 } from "lucide-react";
+import { useLocalization } from "@/components/localization/localization-provider";
+import type {
+  PositionHolder,
+  PositionNode,
+} from "@/lib/prompts/government-structure";
 
-type OfficeType =
-  | "executive"
-  | "legislative"
-  | "judiciary"
-  | "independent_office"
-  | "ministry"
-  | "department"
-  | "county"
-  | "local_office";
-
-type AppointmentMethod = "elected" | "appointed" | "nominated" | "career_service";
-type HolderStatus = "current" | "former";
 type ProfileTab = "latestNews" | "merits" | "demerits";
-
-type PositionHolder = {
-  id: string;
-  name: string;
-  title: string;
-  imageUrl?: string;
-  servedFrom: string;
-  servedTo?: string;
-  status: HolderStatus;
-  personalSummary: string;
-  details: {
-    dateOfBirth?: string;
-    education?: string;
-    profession?: string;
-    politicalAffiliation?: string;
-    homeRegion?: string;
-  };
-  latestNews: Array<{
-    title: string;
-    source: string;
-    date: string;
-    link: string;
-  }>;
-  merits: string[];
-  demerits: string[];
-};
-
-type PositionNode = {
-  id: string;
-  title: string;
-  description: string;
-  icon: string;
-  level: number;
-  parentId?: string;
-  officeType: OfficeType;
-  currentHolderId?: string;
-  location?: string;
-  termLength?: string;
-  appointmentMethod?: AppointmentMethod;
-  responsibilities: string[];
-  history: PositionHolder[];
-  children?: PositionNode[];
-};
-
-type GovernmentTreeProps = {
-  nodes: PositionNode[];
-};
+type LoadingStatus = "idle" | "loading" | "ready" | "error";
 
 const iconMap = {
   badge: BadgeCheck,
@@ -89,7 +36,22 @@ const iconMap = {
   shield: Shield,
 };
 
-export function GovernmentTree({ nodes }: GovernmentTreeProps) {
+export function GovernmentTree() {
+  const { country, language } = useLocalization();
+  const [nodes, setNodes] = useState<PositionNode[]>([]);
+  const [treeStatus, setTreeStatus] = useState<LoadingStatus>("loading");
+  const [treeError, setTreeError] = useState("");
+  const [responsibilitiesByNode, setResponsibilitiesByNode] = useState<
+    Record<string, string[]>
+  >({});
+  const [historyByNode, setHistoryByNode] = useState<
+    Record<string, PositionHolder[]>
+  >({});
+  const [responsibilityStatus, setResponsibilityStatus] =
+    useState<LoadingStatus>("idle");
+  const [historyStatus, setHistoryStatus] = useState<LoadingStatus>("idle");
+  const [responsibilityError, setResponsibilityError] = useState("");
+  const [historyError, setHistoryError] = useState("");
   const [responsibilityNode, setResponsibilityNode] =
     useState<PositionNode | null>(null);
   const [historyNode, setHistoryNode] = useState<PositionNode | null>(null);
@@ -98,6 +60,153 @@ export function GovernmentTree({ nodes }: GovernmentTreeProps) {
   );
 
   const visibleNodes = useMemo(() => limitTreeDepth(nodes, 5), [nodes]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadGovernmentStructure() {
+      setTreeStatus("loading");
+      setTreeError("");
+      setNodes([]);
+      setResponsibilityNode(null);
+      setHistoryNode(null);
+      setSelectedHolder(null);
+      setResponsibilitiesByNode({});
+      setHistoryByNode({});
+
+      try {
+        const response = await fetch("/api/government-structure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selectedCountry: country.name,
+            selectedLanguage: language.name,
+          }),
+          signal: controller.signal,
+        });
+        const data = (await response.json()) as {
+          nodes?: PositionNode[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Unable to load government structure.");
+        }
+
+        setNodes(data.nodes ?? []);
+        setTreeStatus("ready");
+      } catch (loadError) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        console.error("[government-structure] request failed", loadError);
+        setTreeStatus("error");
+        setTreeError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load government structure right now.",
+        );
+      }
+    }
+
+    loadGovernmentStructure();
+
+    return () => controller.abort();
+  }, [country.name, language.name]);
+
+  async function openResponsibilities(node: PositionNode) {
+    setResponsibilityNode(node);
+    setResponsibilityError("");
+
+    if (responsibilitiesByNode[node.id]) {
+      setResponsibilityStatus("ready");
+      return;
+    }
+
+    setResponsibilityStatus("loading");
+
+    try {
+      const response = await fetch("/api/government-responsibilities", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedCountry: country.name,
+          selectedLanguage: language.name,
+          position: toPositionPromptInput(node),
+        }),
+      });
+      const data = (await response.json()) as {
+        responsibilities?: string[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to load responsibilities.");
+      }
+
+      setResponsibilitiesByNode((current) => ({
+        ...current,
+        [node.id]: data.responsibilities ?? [],
+      }));
+      setResponsibilityStatus("ready");
+    } catch (loadError) {
+      console.error("[government-responsibilities] request failed", loadError);
+      setResponsibilityStatus("error");
+      setResponsibilityError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load responsibilities right now.",
+      );
+    }
+  }
+
+  async function openHistory(node: PositionNode) {
+    setHistoryNode(node);
+    setSelectedHolder(null);
+    setHistoryError("");
+
+    if (historyByNode[node.id]) {
+      setHistoryStatus("ready");
+      return;
+    }
+
+    setHistoryStatus("loading");
+
+    try {
+      const response = await fetch("/api/government-history", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          selectedCountry: country.name,
+          selectedLanguage: language.name,
+          position: toPositionPromptInput(node),
+        }),
+      });
+      const data = (await response.json()) as {
+        history?: PositionHolder[];
+        error?: string;
+      };
+
+      if (!response.ok) {
+        throw new Error(data.error ?? "Unable to load position history.");
+      }
+
+      setHistoryByNode((current) => ({
+        ...current,
+        [node.id]: data.history ?? [],
+      }));
+      setHistoryStatus("ready");
+    } catch (loadError) {
+      console.error("[government-history] request failed", loadError);
+      setHistoryStatus("error");
+      setHistoryError(
+        loadError instanceof Error
+          ? loadError.message
+          : "Unable to load position history right now.",
+      );
+    }
+  }
 
   return (
     <section className="mx-auto flex w-full max-w-7xl flex-col gap-6 px-5 py-8 lg:px-8">
@@ -116,29 +225,50 @@ export function GovernmentTree({ nodes }: GovernmentTreeProps) {
 
       <div className="overflow-x-auto rounded-lg border border-[#d9dfd2] bg-white p-4 shadow-sm">
         <div className="min-w-[920px] space-y-5">
-          {visibleNodes.map((node) => (
-            <TreeNode
-              key={node.id}
-              node={node}
-              onHistory={(selectedNode) => {
-                setHistoryNode(selectedNode);
-                setSelectedHolder(null);
-              }}
-              onResponsibilities={setResponsibilityNode}
-            />
-          ))}
+          {treeStatus === "loading" ? <TreeSkeleton /> : null}
+
+          {treeStatus === "error" ? (
+            <div className="rounded-lg bg-[#f7f8f3] p-6 text-sm text-[#53604f]">
+              {treeError}
+            </div>
+          ) : null}
+
+          {treeStatus === "ready" && visibleNodes.length === 0 ? (
+            <div className="rounded-lg bg-[#f7f8f3] p-6 text-sm text-[#53604f]">
+              No government structure is available right now.
+            </div>
+          ) : null}
+
+          {treeStatus === "ready"
+            ? visibleNodes.map((node) => (
+                <TreeNode
+                  key={node.id}
+                  node={node}
+                  onHistory={openHistory}
+                  onResponsibilities={openResponsibilities}
+                />
+              ))
+            : null}
         </div>
       </div>
 
       {responsibilityNode ? (
         <ResponsibilitiesModal
           node={responsibilityNode}
+          error={responsibilityError}
           onClose={() => setResponsibilityNode(null)}
+          responsibilities={
+            responsibilitiesByNode[responsibilityNode.id] ??
+            responsibilityNode.responsibilities
+          }
+          status={responsibilityStatus}
         />
       ) : null}
 
       {historyNode ? (
         <HistoryModal
+          error={historyError}
+          history={historyByNode[historyNode.id] ?? historyNode.history}
           node={historyNode}
           onClose={() => {
             setHistoryNode(null);
@@ -146,6 +276,7 @@ export function GovernmentTree({ nodes }: GovernmentTreeProps) {
           }}
           onSelectHolder={setSelectedHolder}
           selectedHolder={selectedHolder}
+          status={historyStatus}
         />
       ) : null}
     </section>
@@ -165,6 +296,7 @@ function TreeNode({
   const currentHolder = node.history.find(
     (holder) => holder.id === node.currentHolderId,
   );
+  const currentHolderName = currentHolder?.name ?? node.currentHolderName;
 
   return (
     <div className="relative">
@@ -195,8 +327,8 @@ function TreeNode({
             </p>
 
             <div className="mt-3 flex flex-wrap gap-3 text-sm text-[#61705d]">
-              {currentHolder ? (
-                <span>Current holder: {currentHolder.name}</span>
+              {currentHolderName ? (
+                <span>Current holder: {currentHolderName}</span>
               ) : (
                 <span>Current holder unavailable</span>
               )}
@@ -247,15 +379,20 @@ function TreeNode({
       ) : null}
     </div>
   );
-
 }
 
 function ResponsibilitiesModal({
+  error,
   node,
   onClose,
+  responsibilities,
+  status,
 }: {
+  error: string;
   node: PositionNode;
   onClose: () => void;
+  responsibilities: string[];
+  status: LoadingStatus;
 }) {
   return (
     <Modal title={`${node.title} responsibilities`} onClose={onClose}>
@@ -278,16 +415,30 @@ function ResponsibilitiesModal({
           <h3 className="text-sm font-semibold uppercase tracking-[0.12em] text-[#61705d]">
             Responsibilities
           </h3>
-          <ul className="mt-3 grid gap-3">
-            {node.responsibilities.map((responsibility) => (
-              <li
-                className="rounded-md bg-[#f7f8f3] p-3 text-sm leading-6 text-[#34423a]"
-                key={responsibility}
-              >
-                {responsibility}
-              </li>
-            ))}
-          </ul>
+          {status === "loading" ? <ModalSkeleton /> : null}
+          {status === "error" ? (
+            <p className="mt-3 rounded-md bg-[#f7f8f3] p-3 text-sm text-[#9a3412]">
+              {error}
+            </p>
+          ) : null}
+          {status === "ready" ? (
+            responsibilities.length ? (
+              <ul className="mt-3 grid gap-3">
+                {responsibilities.map((responsibility) => (
+                  <li
+                    className="rounded-md bg-[#f7f8f3] p-3 text-sm leading-6 text-[#34423a]"
+                    key={responsibility}
+                  >
+                    {responsibility}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-3 rounded-md bg-[#f7f8f3] p-3 text-sm text-[#53604f]">
+                No verified responsibilities are available right now.
+              </p>
+            )
+          ) : null}
         </div>
       </div>
     </Modal>
@@ -295,43 +446,64 @@ function ResponsibilitiesModal({
 }
 
 function HistoryModal({
+  error,
+  history,
   node,
   onClose,
   onSelectHolder,
   selectedHolder,
+  status,
 }: {
+  error: string;
+  history: PositionHolder[];
   node: PositionNode;
   onClose: () => void;
   onSelectHolder: (holder: PositionHolder) => void;
   selectedHolder: PositionHolder | null;
+  status: LoadingStatus;
 }) {
   return (
     <Modal title={`${node.title} history`} onClose={onClose} wide>
       <div className="grid gap-6 lg:grid-cols-[0.82fr_1.18fr]">
         <div className="space-y-3">
-          {node.history.map((holder) => (
-            <button
-              className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
-                selectedHolder?.id === holder.id
-                  ? "border-[#2f6f5e] bg-[#eef3e9]"
-                  : "border-[#d9dfd2] hover:bg-[#f7f8f3]"
-              }`}
-              key={holder.id}
-              onClick={() => onSelectHolder(holder)}
-              type="button"
-            >
-              <HolderAvatar holder={holder} size="small" />
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold text-[#17201a]">{holder.name}</p>
-                <p className="text-sm text-[#61705d]">
-                  {holder.servedFrom} to {holder.servedTo ?? "Current"}
-                </p>
-              </div>
-              <span className="rounded-full bg-[#eef3e9] px-2 py-1 text-xs font-semibold capitalize text-[#2f6f5e]">
-                {holder.status}
-              </span>
-            </button>
-          ))}
+          {status === "loading" ? <ModalSkeleton /> : null}
+          {status === "error" ? (
+            <p className="rounded-md bg-[#f7f8f3] p-3 text-sm text-[#9a3412]">
+              {error}
+            </p>
+          ) : null}
+          {status === "ready" && !history.length ? (
+            <p className="rounded-md bg-[#f7f8f3] p-3 text-sm text-[#53604f]">
+              No verified history is available right now.
+            </p>
+          ) : null}
+          {status === "ready"
+            ? history.map((holder) => (
+                <button
+                  className={`flex w-full items-center gap-3 rounded-lg border p-3 text-left transition ${
+                    selectedHolder?.id === holder.id
+                      ? "border-[#2f6f5e] bg-[#eef3e9]"
+                      : "border-[#d9dfd2] hover:bg-[#f7f8f3]"
+                  }`}
+                  key={holder.id}
+                  onClick={() => onSelectHolder(holder)}
+                  type="button"
+                >
+                  <HolderAvatar holder={holder} size="small" />
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold text-[#17201a]">
+                      {holder.name}
+                    </p>
+                    <p className="text-sm text-[#61705d]">
+                      {holder.servedFrom} to {holder.servedTo ?? "Current"}
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#eef3e9] px-2 py-1 text-xs font-semibold capitalize text-[#2f6f5e]">
+                    {holder.status}
+                  </span>
+                </button>
+              ))
+            : null}
         </div>
 
         {selectedHolder ? (
@@ -519,6 +691,41 @@ function Detail({ label, value }: { label: string; value: string }) {
   );
 }
 
+function TreeSkeleton() {
+  return (
+    <div className="space-y-4">
+      {Array.from({ length: 5 }).map((_, index) => (
+        <div
+          className="rounded-lg border border-[#d9dfd2] bg-[#fbfcf8] p-4"
+          key={index}
+        >
+          <div className="flex items-start gap-4">
+            <div className="h-12 w-12 animate-pulse rounded-md bg-[#e1e7dc]" />
+            <div className="flex-1 space-y-3">
+              <div className="h-4 w-40 animate-pulse rounded bg-[#e1e7dc]" />
+              <div className="h-6 w-72 animate-pulse rounded bg-[#e1e7dc]" />
+              <div className="h-4 w-full animate-pulse rounded bg-[#e1e7dc]" />
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function ModalSkeleton() {
+  return (
+    <div className="mt-3 grid gap-3">
+      {Array.from({ length: 3 }).map((_, index) => (
+        <div
+          className="h-12 animate-pulse rounded-md bg-[#e1e7dc]"
+          key={index}
+        />
+      ))}
+    </div>
+  );
+}
+
 function limitTreeDepth(nodes: PositionNode[], depth: number): PositionNode[] {
   return nodes.map((node) => ({
     ...node,
@@ -527,6 +734,22 @@ function limitTreeDepth(nodes: PositionNode[], depth: number): PositionNode[] {
         ? limitTreeDepth(node.children, depth - 1)
         : undefined,
   }));
+}
+
+function toPositionPromptInput(node: PositionNode) {
+  return {
+    id: node.id,
+    title: node.title,
+    description: node.description,
+    officeType: node.officeType,
+    level: node.level,
+    parentId: node.parentId,
+    location: node.location,
+    termLength: node.termLength,
+    appointmentMethod: node.appointmentMethod,
+    currentHolderId: node.currentHolderId,
+    currentHolderName: node.currentHolderName,
+  };
 }
 
 function formatLabel(value: string) {
