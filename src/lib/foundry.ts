@@ -6,6 +6,7 @@ const defaultAgentVersion = "1";
 export function createFoundryProjectClient() {
   const endpoint = process.env.AZURE_FOUNDRY_PROJECT_ENDPOINT;
 
+
   if (!endpoint) {
     throw new Error("AZURE_FOUNDRY_PROJECT_ENDPOINT is not configured.");
   }

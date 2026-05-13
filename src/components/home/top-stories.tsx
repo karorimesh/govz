@@ -1,9 +1,8 @@
 "use client";
 
-import Image from "next/image";
 import Link from "next/link";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocalization } from "@/components/localization/localization-provider";
 
 type Story = {
@@ -14,16 +13,66 @@ type Story = {
   link: string;
 };
 
-type TopStoriesProps = {
-  stories: Story[];
-};
-
 const storiesPerPage = 5;
 
-export function TopStories({ stories }: TopStoriesProps) {
-  const { t } = useLocalization();
+export function TopStories() {
+  const { country, language, t } = useLocalization();
+  const [stories, setStories] = useState<Story[]>([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    "loading",
+  );
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    async function loadStories() {
+      setStatus("loading");
+      setError("");
+      setStories([]);
+      setPage(1);
+
+      try {
+        const response = await fetch("/api/homepage-stories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            selectedCountry: country.name,
+            selectedLanguage: language.name,
+          }),
+          signal: controller.signal,
+        });
+        const data = (await response.json()) as {
+          stories?: Story[];
+          error?: string;
+        };
+
+        if (!response.ok) {
+          throw new Error(data.error ?? "Unable to load stories.");
+        }
+
+        setStories(data.stories ?? []);
+        setStatus("ready");
+      } catch (loadError) {
+        if (controller.signal.aborted) {
+          return;
+        }
+
+        setStatus("error");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load governance stories right now.",
+        );
+      }
+    }
+
+    loadStories();
+
+    return () => controller.abort();
+  }, [country.name, language.name]);
 
   const filteredStories = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
@@ -90,7 +139,24 @@ export function TopStories({ stories }: TopStoriesProps) {
         </label>
       </div>
 
-      {featuredStory ? (
+      {status === "loading" ? (
+        <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+          <StorySkeleton featured />
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
+            {Array.from({ length: 4 }).map((_, index) => (
+              <StorySkeleton key={index} />
+            ))}
+          </div>
+        </div>
+      ) : null}
+
+      {status === "error" ? (
+        <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
+          {error}
+        </div>
+      ) : null}
+
+      {status === "ready" && featuredStory ? (
         <div className="grid gap-5 lg:grid-cols-[1.2fr_0.8fr]">
           <StoryCard featured story={featuredStory} />
           <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-1">
@@ -99,11 +165,13 @@ export function TopStories({ stories }: TopStoriesProps) {
             ))}
           </div>
         </div>
-      ) : (
+      ) : null}
+
+      {status === "ready" && !featuredStory ? (
         <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
           No stories match your search.
         </div>
-      )}
+      ) : null}
 
       <div className="flex flex-col gap-3 border-t border-[#d9dfd2] pt-5 sm:flex-row sm:items-center sm:justify-between">
         <p className="text-sm text-[#61705d]">
@@ -153,17 +221,18 @@ function StoryCard({
       }`}
     >
       <Link className="group relative min-h-56 overflow-hidden" href={story.link}>
-        <Image
-          alt=""
-          className="object-cover transition duration-300 group-hover:scale-105"
-          fill
-          sizes={
-            featured
-              ? "(min-width: 1024px) 55vw, 100vw"
-              : "(min-width: 1024px) 190px, 100vw"
-          }
-          src={story.imgLink}
-        />
+        {story.imgLink ? (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 bg-cover bg-center transition duration-300 group-hover:scale-105"
+            style={{ backgroundImage: `url(${story.imgLink})` }}
+          />
+        ) : (
+          <span
+            aria-hidden="true"
+            className="absolute inset-0 bg-[#dfe6d8]"
+          />
+        )}
       </Link>
       <div className={featured ? "p-6 sm:p-8" : "p-5"}>
         <p className="text-sm font-medium text-[#61705d]">By {story.author}</p>
@@ -183,6 +252,29 @@ function StoryCard({
         >
           Read story
         </Link>
+      </div>
+    </article>
+  );
+}
+
+function StorySkeleton({ featured = false }: { featured?: boolean }) {
+  return (
+    <article
+      className={`overflow-hidden rounded-lg border border-[#d9dfd2] bg-white shadow-sm ${
+        featured
+          ? "grid lg:min-h-[520px]"
+          : "grid sm:grid-cols-[160px_1fr] lg:grid-cols-[190px_1fr]"
+      }`}
+    >
+      <div className="min-h-56 animate-pulse bg-[#e1e7dc]" />
+      <div className={featured ? "space-y-4 p-6 sm:p-8" : "space-y-4 p-5"}>
+        <div className="h-4 w-28 animate-pulse rounded bg-[#e1e7dc]" />
+        <div className="h-8 w-4/5 animate-pulse rounded bg-[#e1e7dc]" />
+        <div className="space-y-2">
+          <div className="h-4 animate-pulse rounded bg-[#e1e7dc]" />
+          <div className="h-4 w-5/6 animate-pulse rounded bg-[#e1e7dc]" />
+          <div className="h-4 w-2/3 animate-pulse rounded bg-[#e1e7dc]" />
+        </div>
       </div>
     </article>
   );

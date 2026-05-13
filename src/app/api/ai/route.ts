@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { generateFoundryAgentResponse } from "@/lib/foundry";
 
 export async function POST(request: Request) {
+  console.info(request)
   const body = (await request.json().catch(() => null)) as {
     prompt?: unknown;
   } | null;

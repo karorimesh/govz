@@ -28,6 +28,8 @@ After setup, create or update `Layout.md` and use it as the source of truth for 
 
 Create or update `Localization.md` when adding country, language, navigation-label, or form-label behavior. Country data belongs in `src/data/countries.json`; supported language data belongs in `src/data/languages.json`; dummy content should not be translated.
 
+Create or update `promts.md` when adding AI prompts. Runtime prompt builders should mirror the markdown prompt and live under `src/lib/prompts`.
+
 Create and reference page planning files before implementing each major section:
 
 - `Homepage.md` for the home page.
@@ -89,7 +91,8 @@ Only expose variables with `NEXT_PUBLIC_` when they are safe to send to the brow
 - Call Azure Foundry agents from server-side code only, such as Route Handlers or Server Actions.
 - Do not call Azure Foundry directly from client components.
 - Keep Azure Foundry client setup in `src/lib/foundry.ts`.
-- Use `DefaultAzureCredential` for local Azure authentication unless a more specific credential is required.
+- Use `DefaultAzureCredential` for local Azure CLI authentication; do not require or document `AZURE_FOUNDRY_API_KEY`.
+- Developers should run `az login` before calling Foundry-backed routes locally.
 - Validate and sanitize user input before sending it to the API.
 - Return only the data the UI needs.
 - Handle API errors gracefully and avoid exposing internal error details to users.
