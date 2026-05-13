@@ -213,92 +213,10 @@ const departments = [
   },
 ];
 
-const messages = [
-  {
-    id: "msg-1",
-    title: "Clinic medicine stock has been unavailable",
-    message:
-      "The local clinic has not had blood pressure medicine for two weeks. Patients are being told to buy privately, but many residents cannot afford it.",
-    category: "complaint" as const,
-    urgency: "high" as const,
-    status: "assigned" as const,
-    location: {
-      county: "Nakuru",
-      constituency: "Nakuru Town East",
-      ward: "Biashara",
-    },
-    sender: {
-      name: "Grace Wanjiku",
-      phone: "+254712345123",
-      preferredContact: "phone" as const,
-    },
-    maskedSender: {
-      name: "G**** W******",
-      phone: "+25471** *** 123",
-    },
-    classification: {
-      departmentId: "health-services",
-      confidence: 0.88,
-      reason: "Matched health service complaint and clinic medicine keywords.",
-    },
-    submittedAt: "2 hours ago",
-    updatedAt: "1 hour ago",
-  },
-  {
-    id: "msg-2",
-    title: "Road drainage is blocked near the bus stage",
-    message:
-      "Drainage beside the main road is blocked and water floods the bus stage whenever it rains. Passengers are forced to stand on the road.",
-    category: "safety_concern" as const,
-    urgency: "medium" as const,
-    status: "triaged" as const,
-    location: {
-      county: "Mombasa",
-      ward: "Tudor",
-      addressText: "Near Tudor bus stage",
-    },
-    maskedSender: {},
-    classification: {
-      departmentId: "roads-transport",
-      confidence: 0.83,
-      reason: "Matched road, drainage, and public transport safety keywords.",
-    },
-    submittedAt: "Yesterday",
-    updatedAt: "Yesterday",
-  },
-  {
-    id: "msg-3",
-    title: "Officer requested a payment for processing permit",
-    message:
-      "A licensing officer asked for extra money before processing a business permit. I have the date and office location but want to remain anonymous.",
-    category: "corruption_report" as const,
-    urgency: "high" as const,
-    status: "new" as const,
-    location: {
-      county: "Nairobi",
-      addressText: "Licensing office",
-    },
-    sender: {
-      email: "reporter@example.com",
-      preferredContact: "email" as const,
-    },
-    maskedSender: {
-      email: "re***@example.com",
-    },
-    classification: {
-      departmentId: "anti-corruption-ethics",
-      confidence: 0.94,
-      reason: "Corruption reports are routed to the Anti-Corruption And Ethics Office.",
-    },
-    submittedAt: "3 days ago",
-    updatedAt: "3 days ago",
-  },
-];
-
 export default function HelpLinePage() {
   return (
     <main className="flex flex-1 bg-[#f7f8f3]">
-      <HelpLineBoard departments={departments} initialMessages={messages} />
+      <HelpLineBoard departmentTemplates={departments} />
     </main>
   );
 }

@@ -11,6 +11,7 @@ Each anonymous public message should use this shape:
 ```ts
 {
   id: string;
+  country: string;
   title: string;
   message: string;
   category:
@@ -66,6 +67,7 @@ Departments and offices classify and handle incoming help line messages.
 ```ts
 {
   id: string;
+  country: string;
   name: string;
   type: "department" | "office" | "agency" | "emergency_unit";
   description: string;
@@ -134,11 +136,16 @@ Departments and offices classify and handle incoming help line messages.
 - Show a list or board of submitted messages using masked sender details.
 - Show the assigned department or office for each message.
 - Include search and filtering by category, urgency, status, department, and location.
-- Use dummy data until a real backend is connected.
+- Store help line messages in the `helpLineMessages` Firestore collection.
+- Store departments and offices in the `helpLineDepartments` Firestore collection.
+- Every create or update must write the currently selected country into the document.
+- Every list/filter operation must query by the currently selected country before applying UI filters.
+- The page may use local department templates only as a fallback when no departments have been seeded for the selected country.
+- Do not implement authentication or authorization in this integration.
 
 ## Future Integration Notes
 
-- Messages and departments can later be stored in Firebase.
+- Messages and departments are stored in Firebase through `src/lib/firebase/help-line.ts`.
 - Classification can later use server-side OpenAI assistance.
 - Sensitive sender details should be protected with strict access controls.
 - Attachments should be scanned and stored securely.

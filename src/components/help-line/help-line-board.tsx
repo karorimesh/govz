@@ -1,95 +1,40 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useEffect, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Building2,
   Filter,
   MessageSquarePlus,
   Search,
+  Trash2,
 } from "lucide-react";
 import { useLocalization } from "@/components/localization/localization-provider";
+import {
+  createHelpLineMessage,
+  deleteHelpLineMessage,
+  listHelpLineDepartments,
+  listHelpLineMessages,
+  updateHelpLineMessageStatus,
+  type Department,
+  type HelpLineMessage,
+  type MessageCategory,
+  type MessageStatus,
+  type Urgency,
+} from "@/lib/firebase/help-line";
 import { translateLabel } from "@/lib/localization/labels";
 
-type MessageCategory =
-  | "complaint"
-  | "service_request"
-  | "corruption_report"
-  | "safety_concern"
-  | "emergency"
-  | "feedback"
-  | "general_support";
-
-type Urgency = "low" | "medium" | "high" | "critical";
-type MessageStatus =
-  | "new"
-  | "triaged"
-  | "assigned"
-  | "in_progress"
-  | "resolved"
-  | "closed";
-
-type Department = {
-  id: string;
-  name: string;
-  type: "department" | "office" | "agency" | "emergency_unit";
-  description: string;
+type DepartmentTemplate = Omit<
+  Department,
+  "country" | "handlesCategories" | "keywords"
+> & {
   handlesCategories: readonly MessageCategory[];
   keywords: readonly string[];
-  contact: {
-    phone?: string;
-    email?: string;
-    physicalOffice?: string;
-  };
-  escalationOfficeId?: string;
-  serviceLevel: Record<Urgency, string>;
 };
-
-type HelpLineMessage = {
-  id: string;
-  title: string;
-  message: string;
-  category: MessageCategory;
-  urgency: Urgency;
-  status: MessageStatus;
-  location?: {
-    county?: string;
-    constituency?: string;
-    ward?: string;
-    addressText?: string;
-  };
-  sender?: {
-    name?: string;
-    phone?: string;
-    email?: string;
-    nationalId?: string;
-    preferredContact?: "phone" | "email" | "none";
-  };
-  maskedSender: {
-    name?: string;
-    phone?: string;
-    email?: string;
-    nationalId?: string;
-  };
-  attachments?: Array<{
-    id: string;
-    fileName: string;
-    fileType: string;
-    url: string;
-  }>;
-  classification: {
-    departmentId: string;
-    officeId?: string;
-    confidence: number;
-    reason: string;
-  };
-  submittedAt: string;
-  updatedAt: string;
-};
+type LoadingStatus = "loading" | "ready" | "error";
 
 type HelpLineBoardProps = {
-  departments: Department[];
-  initialMessages: HelpLineMessage[];
+  departmentTemplates: DepartmentTemplate[];
 };
 
 const categoryOptions: MessageCategory[] = [
@@ -111,18 +56,69 @@ const statusOptions: MessageStatus[] = [
   "closed",
 ];
 
-export function HelpLineBoard({
-  departments,
-  initialMessages,
-}: HelpLineBoardProps) {
-  const [messages, setMessages] = useState(initialMessages);
+export function HelpLineBoard({ departmentTemplates }: HelpLineBoardProps) {
+  const { country, t } = useLocalization();
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [messages, setMessages] = useState<HelpLineMessage[]>([]);
+  const [status, setStatus] = useState<LoadingStatus>("loading");
+  const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [urgencyFilter, setUrgencyFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [departmentFilter, setDepartmentFilter] = useState("all");
   const [notice, setNotice] = useState("");
-  const { t } = useLocalization();
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    let isActive = true;
+
+    async function loadHelpLine() {
+      setStatus("loading");
+      setError("");
+      setNotice("");
+      setMessages([]);
+      setDepartmentFilter("all");
+
+      try {
+        const [loadedDepartments, loadedMessages] = await Promise.all([
+          listHelpLineDepartments(country.name),
+          listHelpLineMessages(country.name),
+        ]);
+
+        if (!isActive) {
+          return;
+        }
+
+        setDepartments(
+          loadedDepartments.length
+            ? loadedDepartments
+            : withCountry(departmentTemplates, country.name),
+        );
+        setMessages(sortMessages(loadedMessages));
+        setStatus("ready");
+      } catch (loadError) {
+        if (!isActive) {
+          return;
+        }
+
+        console.error("[help-line] list failed", loadError);
+        setDepartments(withCountry(departmentTemplates, country.name));
+        setStatus("error");
+        setError(
+          loadError instanceof Error
+            ? loadError.message
+            : "Unable to load help line messages right now.",
+        );
+      }
+    }
+
+    loadHelpLine();
+
+    return () => {
+      isActive = false;
+    };
+  }, [country.name, departmentTemplates]);
 
   const departmentById = useMemo(
     () => new Map(departments.map((department) => [department.id, department])),
@@ -138,6 +134,7 @@ export function HelpLineBoard({
         message.title,
         message.message,
         message.category,
+        message.country,
         message.urgency,
         message.status,
         message.location?.county,
@@ -169,9 +166,10 @@ export function HelpLineBoard({
     urgencyFilter,
   ]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const formData = new FormData(event.currentTarget);
+    const form = event.currentTarget;
     const category = String(formData.get("category")) as MessageCategory;
     const urgency = String(formData.get("urgency")) as Urgency;
     const title = String(formData.get("title") ?? "").trim();
@@ -196,8 +194,9 @@ export function HelpLineBoard({
       urgency,
     });
 
-    const newMessage: HelpLineMessage = {
-      id: crypto.randomUUID(),
+    const now = new Date().toISOString();
+    const newMessage: Omit<HelpLineMessage, "id"> = {
+      country: country.name,
       title,
       message,
       category,
@@ -227,17 +226,96 @@ export function HelpLineBoard({
           ]
         : undefined,
       classification,
-      submittedAt: "Just now",
-      updatedAt: "Just now",
+      submittedAt: now,
+      updatedAt: now,
     };
 
-    setMessages((currentMessages) => [newMessage, ...currentMessages]);
-    setNotice(
-      `Message submitted anonymously and assigned to ${
-        departmentById.get(classification.departmentId)?.name ?? "a public desk"
-      }.`,
-    );
-    event.currentTarget.reset();
+    setIsSubmitting(true);
+    setNotice("");
+
+    try {
+      const savedMessage = await createHelpLineMessage(newMessage);
+
+      setMessages((currentMessages) =>
+        sortMessages([savedMessage, ...currentMessages]),
+      );
+      setNotice(
+        `Message submitted for ${country.name} and assigned to ${
+          departmentById.get(classification.departmentId)?.name ?? "a public desk"
+        }.`,
+      );
+      form.reset();
+    } catch (submitError) {
+      console.error("[help-line] create failed", submitError);
+      setNotice(
+        submitError instanceof Error
+          ? submitError.message
+          : "Unable to submit help line message right now.",
+      );
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function changeMessageStatus(
+    message: HelpLineMessage,
+    nextStatus: MessageStatus,
+  ) {
+    setNotice("");
+
+    try {
+      const result = await updateHelpLineMessageStatus({
+        country: country.name,
+        id: message.id,
+        status: nextStatus,
+      });
+
+      setMessages((currentMessages) =>
+        currentMessages.map((currentMessage) =>
+          currentMessage.id === message.id
+            ? {
+                ...currentMessage,
+                country: country.name,
+                status: result.status,
+                updatedAt: result.updatedAt,
+              }
+            : currentMessage,
+        ),
+      );
+      setNotice(`Status updated for ${country.name}.`);
+    } catch (updateError) {
+      console.error("[help-line] status update failed", updateError);
+      setNotice(
+        updateError instanceof Error
+          ? updateError.message
+          : "Unable to update help line message right now.",
+      );
+    }
+  }
+
+  async function removeMessage(message: HelpLineMessage) {
+    const confirmed = window.confirm(`Delete "${message.title}"?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setNotice("");
+
+    try {
+      await deleteHelpLineMessage({ country: country.name, id: message.id });
+      setMessages((currentMessages) =>
+        currentMessages.filter((currentMessage) => currentMessage.id !== message.id),
+      );
+      setNotice(`Message deleted for ${country.name}.`);
+    } catch (deleteError) {
+      console.error("[help-line] delete failed", deleteError);
+      setNotice(
+        deleteError instanceof Error
+          ? deleteError.message
+          : "Unable to delete help line message right now.",
+      );
+    }
   }
 
   return (
@@ -250,6 +328,9 @@ export function HelpLineBoard({
           <h1 className="mt-2 text-3xl font-semibold text-[#17201a] sm:text-4xl">
             Help Line
           </h1>
+          <p className="mt-3 text-sm text-[#61705d]">
+            Showing help line messages for {country.name}
+          </p>
         </div>
 
         <div className="rounded-lg border border-[#d9dfd2] bg-[#eef3e9] p-4 text-sm leading-6 text-[#34423a]">
@@ -322,10 +403,11 @@ export function HelpLineBoard({
           </fieldset>
 
           <button
-            className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548]"
+            className="h-11 rounded-md bg-[#173c32] px-4 text-sm font-semibold text-white transition hover:bg-[#245548] disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={isSubmitting}
             type="submit"
           >
-            {t("common.submit")}
+            {isSubmitting ? "Submitting..." : t("common.submit")}
           </button>
         </form>
       </div>
@@ -398,17 +480,33 @@ export function HelpLineBoard({
           </div>
         </div>
 
+        {status === "loading" ? (
+          <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
+            Loading help line messages for {country.name}...
+          </div>
+        ) : null}
+
+        {status === "error" ? (
+          <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
+            {error}
+          </div>
+        ) : null}
+
         <div className="grid gap-4">
           {filteredMessages.map((message) => (
             <MessageCard
               department={departmentById.get(message.classification.departmentId)}
               key={message.id}
               message={message}
+              onDelete={() => removeMessage(message)}
+              onStatusChange={(nextStatus) =>
+                changeMessageStatus(message, nextStatus)
+              }
             />
           ))}
-          {filteredMessages.length === 0 ? (
+          {status === "ready" && filteredMessages.length === 0 ? (
             <div className="rounded-lg border border-[#d9dfd2] bg-white p-8 text-center text-[#4d5b4a]">
-              No help line messages match your filters.
+              No help line messages match your filters for {country.name}.
             </div>
           ) : null}
         </div>
@@ -420,9 +518,13 @@ export function HelpLineBoard({
 function MessageCard({
   department,
   message,
+  onDelete,
+  onStatusChange,
 }: {
   department?: Department;
   message: HelpLineMessage;
+  onDelete: () => void;
+  onStatusChange: (status: MessageStatus) => void;
 }) {
   return (
     <article className="rounded-lg border border-[#d9dfd2] bg-white p-5 shadow-sm">
@@ -440,12 +542,37 @@ function MessageCard({
             {message.title}
           </h3>
         </div>
-        <UrgencyBadge urgency={message.urgency} />
+        <div className="flex flex-wrap items-center gap-2">
+          <UrgencyBadge urgency={message.urgency} />
+          <select
+            aria-label="Update message status"
+            className="h-9 rounded-md border border-[#cbd4c4] bg-white px-2 text-xs font-semibold capitalize text-[#34423a] outline-none focus:border-[#2f6f5e] focus:ring-2 focus:ring-[#2f6f5e]/20"
+            onChange={(event) =>
+              onStatusChange(event.target.value as MessageStatus)
+            }
+            value={message.status}
+          >
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status.replace("_", " ")}
+              </option>
+            ))}
+          </select>
+          <button
+            aria-label="Delete message"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-[#cbd4c4] bg-white text-[#a63f2f] transition hover:bg-[#ffe7df]"
+            onClick={onDelete}
+            type="button"
+          >
+            <Trash2 aria-hidden="true" size={16} />
+          </button>
+        </div>
       </div>
 
       <p className="mt-3 text-sm leading-6 text-[#53604f]">{message.message}</p>
 
       <div className="mt-4 grid gap-3 sm:grid-cols-2">
+        <InfoBox label="Country" value={message.country} />
         <InfoBox
           label="Masked sender"
           value={maskedSenderLabel(message.maskedSender)}
@@ -756,6 +883,25 @@ function maskedSenderLabel(sender: HelpLineMessage["maskedSender"]) {
   );
 
   return values.length ? values.join(" / ") : "Anonymous";
+}
+
+function sortMessages(messages: HelpLineMessage[]) {
+  return [...messages].sort(
+    (left, right) =>
+      Date.parse(right.submittedAt) - Date.parse(left.submittedAt),
+  );
+}
+
+function withCountry(
+  departments: DepartmentTemplate[],
+  country: string,
+): Department[] {
+  return departments.map((department) => ({
+    ...department,
+    country,
+    handlesCategories: [...department.handlesCategories],
+    keywords: [...department.keywords],
+  }));
 }
 
 function formatLabel(value: string) {
