@@ -1,83 +1,38 @@
-import { AIProjectClient } from "@azure/ai-projects";
-import { DefaultAzureCredential } from "@azure/identity";
-
-const defaultAgentVersion = "1";
-
-export function createFoundryProjectClient() {
-  const endpoint = process.env.AZURE_FOUNDRY_PROJECT_ENDPOINT;
-
-  if (!endpoint) {
-    console.error("[foundry] missing project endpoint");
-    throw new Error("AZURE_FOUNDRY_PROJECT_ENDPOINT is not configured.");
-  }
-
-  console.log("[foundry] creating project client", {
-    hasEndpoint: Boolean(endpoint),
-    auth: "DefaultAzureCredential",
-  });
-
-  return new AIProjectClient(endpoint, new DefaultAzureCredential());
-}
+import { getBackendUrl } from "@/lib/backend";
 
 export async function generateFoundryAgentResponse(prompt: string) {
-  const agentName = process.env.AZURE_FOUNDRY_AGENT_NAME;
+  const backendUrl = getBackendUrl("/api/ai/text");
 
-  if (!agentName) {
-    console.error("[foundry] missing agent name");
-    throw new Error("AZURE_FOUNDRY_AGENT_NAME is not configured.");
-  }
-
-  console.log("[foundry] generating agent response", {
-    agentName,
-    agentVersion: process.env.AZURE_FOUNDRY_AGENT_VERSION ?? defaultAgentVersion,
+  console.log("[foundry] sending prompt to backend", {
+    backendUrl,
     promptLength: prompt.length,
   });
 
-  const projectClient = createFoundryProjectClient();
-  const openAIClient = projectClient.getOpenAIClient();
-
-  console.log("[foundry] creating conversation");
-
-  const conversation = await openAIClient.conversations.create({
-    items: [
-      {
-        type: "message",
-        role: "user",
-        content: prompt,
-      },
-    ],
+  const response = await fetch(backendUrl, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ prompt }),
   });
 
-  console.log("[foundry] conversation created", {
-    conversationId: conversation.id,
-  });
+  if (!response.ok) {
+    console.error("[foundry] backend request failed", {
+      status: response.status,
+    });
+    throw new Error(`AI backend request failed with status ${response.status}`);
+  }
 
-  console.log("[foundry] creating response", {
-    conversationId: conversation.id,
-    agentName,
-    agentVersion: process.env.AZURE_FOUNDRY_AGENT_VERSION ?? defaultAgentVersion,
-  });
+  const data = (await response.json().catch(() => null)) as {
+    response?: unknown;
+  } | null;
 
-  const response = await openAIClient.responses.create(
-    {
-      conversation: conversation.id,
-    },
-    {
-      body: {
-        agent_reference: {
-          name: agentName,
-          version:
-            process.env.AZURE_FOUNDRY_AGENT_VERSION ?? defaultAgentVersion,
-          type: "agent_reference",
-        },
-      },
-    },
-  );
+  if (typeof data?.response !== "string") {
+    console.error("[foundry] backend response missing 'response' field");
+    throw new Error("AI backend returned an unexpected response shape.");
+  }
 
   console.log("[foundry] response received", {
-    hasOutputText: Boolean(response.output_text),
-    outputLength: response.output_text?.length ?? 0,
+    outputLength: data.response.length,
   });
 
-  return response.output_text;
+  return data.response;
 }

@@ -16,16 +16,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    !process.env.AZURE_FOUNDRY_PROJECT_ENDPOINT ||
-    !process.env.AZURE_FOUNDRY_AGENT_NAME
-  ) {
-    return NextResponse.json(
-      { error: "Azure Foundry agent is not configured." },
-      { status: 503 },
-    );
-  }
-
   try {
     const answer = await generateFoundryAgentResponse(prompt.slice(0, 2000));
 
@@ -34,7 +24,7 @@ export async function POST(request: Request) {
     console.error("[api/ai] response error", error);
 
     return NextResponse.json(
-      { error: "The Azure Foundry assistant is unavailable right now." },
+      { error: "The AI assistant is unavailable right now." },
       { status: 500 },
     );
   }

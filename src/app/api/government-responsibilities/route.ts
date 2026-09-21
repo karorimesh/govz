@@ -29,16 +29,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    !process.env.AZURE_FOUNDRY_PROJECT_ENDPOINT ||
-    !process.env.AZURE_FOUNDRY_AGENT_NAME
-  ) {
-    return NextResponse.json(
-      { error: "Azure Foundry agent is not configured." },
-      { status: 503 },
-    );
-  }
-
   try {
     const prompt = buildPositionResponsibilitiesPrompt({
       selectedCountry,

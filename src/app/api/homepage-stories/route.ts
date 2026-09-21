@@ -37,21 +37,6 @@ export async function POST(request: Request) {
     );
   }
 
-  if (
-    !process.env.AZURE_FOUNDRY_PROJECT_ENDPOINT ||
-    !process.env.AZURE_FOUNDRY_AGENT_NAME
-  ) {
-    console.log("[api/homepage-stories] response", {
-      status: 503,
-      error: "Azure Foundry agent is not configured.",
-    });
-
-    return NextResponse.json(
-      { error: "Azure Foundry agent is not configured." },
-      { status: 503 },
-    );
-  }
-
   try {
     const prompt = buildHomepageGovernanceNewsPrompt({
       selectedCountry,

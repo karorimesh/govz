@@ -11,17 +11,19 @@ import {
 } from "lucide-react";
 import { useLocalization } from "@/components/localization/localization-provider";
 import {
-  createHelpLineMessage,
-  deleteHelpLineMessage,
-  listHelpLineDepartments,
-  listHelpLineMessages,
-  updateHelpLineMessageStatus,
   type Department,
   type HelpLineMessage,
   type MessageCategory,
   type MessageStatus,
   type Urgency,
 } from "@/lib/firebase/help-line";
+import { listHelpLineDepartments } from "@/lib/help-line-departments";
+import {
+  createHelpLineMessage,
+  deleteHelpLineMessage,
+  listHelpLineMessages,
+  updateHelpLineMessageStatus,
+} from "@/lib/help-line-messages";
 import { translateLabel } from "@/lib/localization/labels";
 
 type DepartmentTemplate = Omit<
@@ -264,20 +266,14 @@ export function HelpLineBoard({ departmentTemplates }: HelpLineBoardProps) {
     setNotice("");
 
     try {
-      const result = await updateHelpLineMessageStatus({
-        country: country.name,
-        id: message.id,
-        status: nextStatus,
-      });
+      const updatedMessage = await updateHelpLineMessageStatus(message.id, nextStatus);
 
       setMessages((currentMessages) =>
         currentMessages.map((currentMessage) =>
           currentMessage.id === message.id
             ? {
                 ...currentMessage,
-                country: country.name,
-                status: result.status,
-                updatedAt: result.updatedAt,
+                ...updatedMessage,
               }
             : currentMessage,
         ),
@@ -303,7 +299,7 @@ export function HelpLineBoard({ departmentTemplates }: HelpLineBoardProps) {
     setNotice("");
 
     try {
-      await deleteHelpLineMessage({ country: country.name, id: message.id });
+      await deleteHelpLineMessage(message.id);
       setMessages((currentMessages) =>
         currentMessages.filter((currentMessage) => currentMessage.id !== message.id),
       );
