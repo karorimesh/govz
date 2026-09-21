@@ -322,7 +322,7 @@ export function HelpLineBoard({ departmentTemplates }: HelpLineBoardProps) {
             Anonymous public support
           </p>
           <h1 className="mt-2 text-3xl font-semibold text-[#17201a] sm:text-4xl">
-            Help Line
+            Help Line - 254711082474
           </h1>
           <p className="mt-3 text-sm text-[#61705d]">
             Showing help line messages for {country.name}
